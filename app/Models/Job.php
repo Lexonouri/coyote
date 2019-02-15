@@ -3,12 +3,16 @@
 namespace Coyote;
 
 use Carbon\Carbon;
+use Coyote\Job\Comment;
 use Coyote\Job\Location;
+use Coyote\Job\Subscriber;
+use Coyote\Models\Job\Refer;
 use Coyote\Models\Scopes\ForUser;
 use Coyote\Services\Elasticsearch\CharFilters\JobFilter;
 use Coyote\Services\Eloquent\HasMany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Notifications\RoutesNotifications;
 
 /**
  * @property int $id
@@ -19,7 +23,6 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property \Carbon\Carbon $deleted_at
  * @property \Carbon\Carbon $deadline_at
  * @property \Carbon\Carbon $boost_at
- * @property int $deadline
  * @property bool $is_expired
  * @property int $salary_from
  * @property int $salary_to
@@ -41,19 +44,26 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $recruitment
  * @property string $requirements
  * @property string $email
+ * @property string $phone
  * @property User $user
  * @property Firm $firm
  * @property Tag[] $tags
  * @property Location[] $locations
  * @property Currency[] $currency
  * @property Feature[] $features
+ * @property Refer[] $refers
  * @property int $plan_id
- * @property int $plan_length
- * @property true $boost
+ * @property bool $is_boost
+ * @property bool $is_publish
+ * @property bool $is_ads
+ * @property bool $is_highlight
+ * @property bool $is_on_top
+ * @property Plan $plan
+ * @property Comment[] $comments
  */
 class Job extends Model
 {
-    use SoftDeletes, ForUser;
+    use SoftDeletes, ForUser, RoutesNotifications;
     use Searchable {
         getIndexBody as parentGetIndexBody;
     }
@@ -77,8 +87,8 @@ class Job extends Model
      * Filling each field adds points to job offer score.
      */
     const SCORE_CONFIG = [
-        'job' => ['salary_from' => 25, 'salary_to' => 25, 'city' => 15, 'seniority_id' => 5],
-        'firm' => ['name' => 15, 'logo' => 5, 'website' => 1, 'description' => 5]
+        'job'             => ['salary_from' => 25, 'salary_to' => 25, 'city' => 15, 'seniority_id' => 5],
+        'firm'            => ['name' => 15, 'logo' => 5, 'website' => 1, 'description' => 5]
     ];
 
     /**
@@ -100,13 +110,12 @@ class Job extends Model
         'currency_id',
         'rate_id',
         'employment_id',
-        'deadline', // column does not really exist in db (model attribute instead)
         'deadline_at',
         'email',
+        'phone',
         'enable_apply',
         'seniority_id',
-        'plan_id', // column does not really exist in db (model attribute instead)
-        'plan_length', // column does not really exist in db (model attribute instead)
+        'plan_id'
     ];
 
     /**
@@ -115,9 +124,9 @@ class Job extends Model
      * @var array
      */
     protected $attributes = [
-        'enable_apply' => true,
-        'is_remote' => false,
-        'title' => ''
+        'enable_apply'      => true,
+        'is_remote'         => false,
+        'title'             => ''
     ];
 
     /**
@@ -125,7 +134,16 @@ class Job extends Model
      *
      * @var array
      */
-    protected $casts = ['is_remote' => 'boolean', 'boost' => 'boolean', 'is_gross' => 'boolean'];
+    protected $casts = [
+        'is_remote'         => 'boolean',
+        'is_boost'          => 'boolean',
+        'is_gross'          => 'boolean',
+        'is_publish'        => 'boolean',
+        'is_ads'            => 'boolean',
+        'is_highlight'      => 'boolean',
+        'is_on_top'         => 'boolean',
+        'plan_id'           => 'int'
+    ];
 
     /**
      * @var string
@@ -136,11 +154,6 @@ class Job extends Model
      * @var array
      */
     protected $dates = ['created_at', 'updated_at', 'deadline_at', 'boost_at'];
-
-    /**
-     * @var array
-     */
-    protected $appends = ['deadline'];
 
     /**
      * Elasticsearch type mapping
@@ -200,6 +213,10 @@ class Job extends Model
                         // filtrujemy firmy po tym polu
                         "original" => ["type" => "text", "analyzer" => "keyword_analyzer", "fielddata" => true]
                     ]
+                ],
+                "slug" => [
+                    "type" => "text",
+                    "analyzer" => "keyword_analyzer"
                 ]
             ]
         ],
@@ -222,15 +239,28 @@ class Job extends Model
         "salary" => [
             "type" => "float"
         ],
+        "referral_bonus" => [
+            "type" => "long"
+        ],
         "score" => [
             "type" => "long"
         ],
-        "boost" => [
+        "is_boost" => [
+            "type" => "boolean"
+        ],
+        "is_publish" => [
+            "type" => "boolean"
+        ],
+        "is_ads" => [
+            "type" => "boolean"
+        ],
+        "is_on_top" => [
+            "type" => "boolean"
+        ],
+        "is_highlight" => [
             "type" => "boolean"
         ]
     ];
-
-    private $plan = ['id' => null, 'length' => 30];
 
     /**
      * We need to set firm id to null offer is private
@@ -311,6 +341,7 @@ class Job extends Model
     {
         $score = 0;
 
+        // 70 points maximum...
         foreach (self::SCORE_CONFIG['job'] as $column => $point) {
             if (!empty($this->{$column})) {
                 $score += $point;
@@ -319,17 +350,20 @@ class Job extends Model
 
         // 30 points maximum...
         $score += min(30, (count($this->tags()->get()) * 10));
+        // 50 points maximum
         $score += min(50, count($this->features()->wherePivot('checked', true)->get()) * 5);
 
         if ($this->firm_id) {
             $firm = $this->firm;
 
+            // 26 points maximum ...
             foreach (self::SCORE_CONFIG['firm'] as $column => $point) {
                 if (!empty($firm->{$column})) {
                     $score += $point;
                 }
             }
 
+            // 25 points maximum...
             $score += min(25, $firm->benefits()->count() * 5);
             $score -= ($firm->is_agency * 15);
         } else {
@@ -397,7 +431,7 @@ class Job extends Model
      */
     public function tags()
     {
-        return $this->belongsToMany('Coyote\Tag', 'job_tags')->orderBy('order')->withPivot(['priority', 'order']);
+        return $this->belongsToMany('Coyote\Tag', 'job_tags')->withPivot(['priority', 'order']);
     }
 
     /**
@@ -413,7 +447,7 @@ class Job extends Model
      */
     public function subscribers()
     {
-        return $this->hasMany('Coyote\Job\Subscriber');
+        return $this->hasMany(Subscriber::class);
     }
 
     /**
@@ -422,6 +456,14 @@ class Job extends Model
     public function applications()
     {
         return $this->hasMany('Coyote\Job\Application');
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function refers()
+    {
+        return $this->hasMany('Coyote\Job\Refer');
     }
 
     /**
@@ -446,6 +488,30 @@ class Job extends Model
     public function payments()
     {
         return $this->hasMany('Coyote\Payment');
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function plan()
+    {
+        return $this->belongsTo(Plan::class);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function comments()
+    {
+        return $this->hasMany(Comment::class);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function commentsWithChildren()
+    {
+        return $this->comments()->whereNull('parent_id')->orderBy('id', 'DESC')->with('children.user:id,name,photo', 'user:id,name,photo');
     }
 
     /**
@@ -476,51 +542,11 @@ class Job extends Model
     }
 
     /**
-     * @param int $value
-     */
-    public function setDeadlineAttribute($value)
-    {
-        $this->attributes['deadline_at'] = Carbon::now()->addDay($value);
-    }
-
-    /**
      * @return int
      */
     public function getDeadlineAttribute()
     {
-        return $this->deadline_at ? (new Carbon($this->deadline_at))->diff(Carbon::now(), false)->days + 1 : 90;
-    }
-
-    /**
-     * @param int $value
-     */
-    public function setPlanIdAttribute($value)
-    {
-        $this->plan['id'] = $value;
-    }
-
-    /**
-     * @return int
-     */
-    public function getPlanIdAttribute()
-    {
-        return $this->plan['id'];
-    }
-
-    /**
-     * @param int $value
-     */
-    public function setPlanLengthAttribute($value)
-    {
-        $this->plan['length'] = $value;
-    }
-
-    /**
-     * @return int
-     */
-    public function getPlanLengthAttribute()
-    {
-        return $this->plan['length'];
+        return (new Carbon($this->deadline_at))->diff(Carbon::now(), false)->days;
     }
 
     /**
@@ -571,15 +597,13 @@ class Job extends Model
     }
 
     /**
-     * @return bool
+     * @param int $planId
      */
-    public function isPlanOngoing()
+    public function setDefaultPlanId($planId)
     {
-        if (!$this->exists) {
-            return false;
+        if (empty($this->plan_id)) {
+            $this->plan_id = $planId;
         }
-
-        return $this->payments()->where('status_id', Payment::PAID)->where('ends_at', '>', Carbon::now())->exists();
     }
 
     /**
@@ -615,19 +639,11 @@ class Job extends Model
     }
 
     /**
-     * Check if user has applied for this job offer.
-     *
-     * @param int|null $userId
-     * @param string $sessionId
-     * @return boolean
+     * @return string
      */
-    public function hasApplied($userId, $sessionId)
+    public function routeNotificationForTwilio()
     {
-        if ($userId) {
-            return $this->applications()->forUser($userId)->exists();
-        }
-
-        return $this->applications()->where('session_id', $sessionId)->exists();
+        return $this->phone;
     }
 
     /**
@@ -684,7 +700,7 @@ class Job extends Model
         if ($this->firm_id) {
             // logo is instance of File object. casting to string returns file name.
             // cast to (array) if firm is empty.
-            $body['firm'] = array_map('strval', (array) array_only($this->firm->toArray(), ['name', 'logo']));
+            $body['firm'] = array_map('strval', (array) array_only($this->firm->toArray(), ['name', 'logo', 'slug']));
         }
 
         return $body;

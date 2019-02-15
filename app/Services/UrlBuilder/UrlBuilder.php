@@ -39,6 +39,16 @@ class UrlBuilder
     }
 
     /**
+     * @param Post\Comment $comment
+     * @return string
+     */
+    public static function postComment(Post\Comment $comment): string
+    {
+        return route('forum.topic', [$comment->post->forum->slug, $comment->post->topic->id, $comment->post->topic->slug], false)
+            . '?p=' . $comment->post->id . '#comment-' . $comment->id;
+    }
+
+    /**
      * @param Wiki $wiki
      * @return string
      */
@@ -49,11 +59,22 @@ class UrlBuilder
 
     /**
      * @param Job $job
+     * @param bool $absolute
      * @return string
      */
-    public static function job(Job $job)
+    public static function job(Job $job, $absolute = false)
     {
-        return route('job.offer', [$job->id, $job->slug], false);
+        return route('job.offer', [$job->id, $job->slug], $absolute);
+    }
+
+    /**
+     * @param Job $job
+     * @param int $commentId
+     * @return string
+     */
+    public static function jobComment(Job $job, int $commentId): string
+    {
+        return route('job.offer', [$job->id, $job->slug]) . '#comment-' . $commentId;
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Coyote\Http\Controllers\Forum;
 
+use Coyote\Notifications\Post\AcceptedNotification;
 use Coyote\Services\Stream\Activities\Accept as Stream_Accept;
 use Coyote\Services\Stream\Activities\Reject as Stream_Reject;
 use Coyote\Services\Stream\Objects\Post as Stream_Post;
@@ -17,23 +18,23 @@ class AcceptController extends BaseController
     public function index($post)
     {
         if (auth()->guest()) {
-            return response()->json(['error' => 'Musisz być zalogowany, aby zaakceptować ten post.'], 500);
+            return response()->json(['error' => 'Musisz być zalogowany, aby zaakceptować ten post.'], 401);
         }
 
         // post belongs to this topic:
         $topic = $post->topic;
 
-        if ($topic->is_locked) {
-            return response()->json(['error' => 'Wątek jest zablokowany.'], 500);
+        if ($this->auth->cannot('write', $topic)) {
+            return response()->json(['error' => 'Wątek jest zablokowany.'], 403);
         }
 
         $forum = $topic->forum;
-        if ($forum->is_locked) {
-            return response()->json(['error' => 'Forum jest zablokowane.'], 500);
+        if ($this->auth->cannot('write', $forum)) {
+            return response()->json(['error' => 'Forum jest zablokowane.'], 403);
         }
 
-        if ($this->getGateFactory()->denies('update', $forum) && $topic->firstPost()->value('user_id') !== $this->userId) {
-            return response()->json(['error' => 'Możesz zaakceptować post tylko we własnym wątku.'], 500);
+        if ($this->auth->cannot('update', $forum) && $topic->firstPost()->value('user_id') !== $this->userId) {
+            return response()->json(['error' => 'Możesz zaakceptować post tylko we własnym wątku.'], 403);
         }
 
         $this->transaction(function () use ($topic, $post, $forum) {
@@ -91,16 +92,7 @@ class AcceptController extends BaseController
                         $reputation->setPositive(true)->setPostId($post->id)->setUserId($post->user_id)->save();
                     }
 
-                    // send notification to the user
-                    app('alert.post.accept')
-                        ->setPostId($post->id)
-                        ->setUsersId($forum->onlyUsersWithAccess([$post->user_id]))
-                        ->setSubject(str_limit($topic->subject, 84))
-                        ->setExcerpt($excerpt)
-                        ->setSenderId($this->userId)
-                        ->setSenderName(auth()->user()->name)
-                        ->setUrl($url)
-                        ->notify();
+                    $post->user->notify(new AcceptedNotification($this->auth, $post));
                 }
 
                 $topic->accept()->create([

@@ -56,6 +56,9 @@ header.navbar-default {
     font-size: 9px;
     border: 1px solid #fff;
     border-radius: 5px;
+    overflow: inherit;
+    text-overflow: inherit;
+    max-width: 100%;
   }
 
   .badge.new {
@@ -172,6 +175,21 @@ header.navbar-default {
 
 // Glowne menu aplikacji. Po naprowadzeniu kursora myszy nad pozycja pokazujemy liste podmenu
 // ---------------------------------------------------------------------------------------
+
+#desktop-menu {
+  // temporary arrow
+  position: relative;
+
+  &:before {
+    position: absolute;
+    top: -5px;
+    left: 154px;
+    width: 20px;
+    height: 29px;
+    background: url('/img/arrow.png') no-repeat;
+    z-index: 100;
+  }
+}
 
 #desktop-menu > li:hover {
   .dropdown-menu {
@@ -404,4 +422,18 @@ header.navbar-default {
   height: 100%;
   position: absolute;
   display: block;
+}
+
+/* Za malo miejsca w pionie, by wyswietlac przyklejony navbar */
+@media (min-aspect-ratio: 18/3) {
+
+  /* zostawiamy navbar na gorze strony */
+  .navbar-fixed-top {
+    position: absolute;
+  }
+  
+  /* ukrywamy przyklejona sciezke podstrony, na ktorej sie znajdujemy */  
+  body .breadcrumb[id] {
+	display: none;
+  }
 }

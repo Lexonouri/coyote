@@ -26,12 +26,11 @@
                 {{ form_row(form.password_confirmation) }}
                 {{ form_row(form.email) }}
                 {{ form_row(form.email_confirmation) }}
-
-                <div class="g-recaptcha margin-md-bottom" data-sitekey="{{ config('services.recaptcha.key') }}"></div>
-
                 {{ form_row(form.submit) }}
 
                 {{ form_end(form) }}
+
+                <p class="text-center text-muted margin-md-top margin-md-bottom"><small>Tworząc konto akceptujesz nasz <a href="/Regulamin">Regulamin</a> oraz <a href="/Polityka_prywatności">Politkę prywatności</a>.</small></p>
             </div>
 
             <div id="box-register-sidebar" class="col-sm-5 col-sm-offset-2 hidden-xs">

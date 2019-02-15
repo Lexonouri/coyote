@@ -6,6 +6,8 @@ use Coyote\Services\Elasticsearch\Aggs;
 use Coyote\Services\Elasticsearch\Functions\Decay;
 use Coyote\Services\Elasticsearch\Functions\FieldValueFactor;
 use Coyote\Services\Elasticsearch\Functions\Random;
+use Coyote\Services\Elasticsearch\Functions\ScriptScore;
+use Coyote\Services\Elasticsearch\MatchAll;
 use Coyote\Services\Elasticsearch\MultiMatch;
 use Coyote\Services\Elasticsearch\QueryBuilder;
 use Coyote\Services\Elasticsearch\Filters;
@@ -16,12 +18,7 @@ use Illuminate\Http\Request;
 class SearchBuilder extends QueryBuilder
 {
     const PER_PAGE = 15;
-    const DEFAULT_SORT = '_score';
-
-    /**
-     * @var Request
-     */
-    protected $request;
+    const DEFAULT_SORT = 'boost_at';
 
     /**
      * @var Filters\Job\City
@@ -44,6 +41,21 @@ class SearchBuilder extends QueryBuilder
     protected $sessionId = null;
 
     /**
+     * @var array
+     */
+    protected $languages = [];
+
+    /**
+     * @var Request
+     */
+    protected $request;
+
+    /**
+     * @var string
+     */
+    protected $sort;
+
+    /**
      * @param Request $request
      */
     public function __construct(Request $request)
@@ -64,25 +76,50 @@ class SearchBuilder extends QueryBuilder
     }
 
     /**
+     * @param array $languages
+     */
+    public function setLanguages(array $languages)
+    {
+        $this->languages = $languages;
+    }
+
+    /**
      * @param \Coyote\Job\Preferences $preferences
      */
     public function setPreferences($preferences)
     {
         if (!empty($preferences->locations)) {
-            $this->location->setLocations($preferences->locations);
+            $this->should(new Filters\Job\Location($preferences->locations));
         }
 
         if (!empty($preferences->tags)) {
-            $this->tag->setTags($preferences->tags);
+            $this->should(new Filters\Job\Tag($preferences->tags));
         }
 
         if (!empty($preferences->is_remote)) {
-            $this->addRemoteFilter();
+            $this->should(new Filters\Job\Remote());
         }
 
         if (!empty($preferences->salary)) {
-            $this->addSalaryFilter($preferences->salary, $preferences->currency_id);
+            $this->should(new Filters\Range('salary', ['gte' => $preferences->salary]));
+            $this->should(new Filters\Job\Currency($preferences->currency_id));
         }
+    }
+
+    /**
+     * @param string $sort
+     */
+    public function setSort($sort)
+    {
+        $this->sort = in_array($sort, ['boost_at', '_score', 'salary']) ? $sort : self::DEFAULT_SORT;
+    }
+
+    /**
+     * @return string
+     */
+    public function getSort()
+    {
+        return $this->sort;
     }
 
     /**
@@ -98,10 +135,14 @@ class SearchBuilder extends QueryBuilder
      */
     public function addRemoteFilter()
     {
-        $this->must(new Filters\Job\Remote());
+        // @see https://github.com/adam-boduch/coyote/issues/374
+        // jezeli szukamy ofert pracy zdalnej ORAZ z danego miasta, stosujemy operator OR zamiast AND
+        $method = count($this->city->getCities()) ? 'should' : 'must';
 
-        if ($this->request->has('remote_range')) {
-            $this->must(new Filters\Job\RemoteRange());
+        $this->$method(new Filters\Job\Remote());
+
+        if ($this->request->filled('remote_range')) {
+            $this->$method(new Filters\Job\RemoteRange());
         }
     }
 
@@ -124,44 +165,57 @@ class SearchBuilder extends QueryBuilder
     }
 
     /**
+     * @param int $userId
+     */
+    public function addUserFilter($userId)
+    {
+        $this->must(new Filters\Term('user_id', $userId));
+    }
+
+    /**
      * @return array
      */
     public function build()
     {
-        if ($this->request->has('q')) {
+        if ($this->request->filled('q')) {
             $this->must(
-                new MultiMatch($this->request->get('q'), ['title^3', 'description', 'requirements', 'recruitment', 'tags^2', 'firm.name'])
+                new MultiMatch(
+                    $this->request->get('q'),
+                    ['title^3', 'description', 'requirements', 'recruitment', 'tags^2', 'firm.name']
+                )
             );
         } else {
             // no keywords were provided -- let's calculate score based on score functions
             $this->setupScoreFunctions();
+            $this->must(new MatchAll());
         }
 
-        if ($this->request->has('city')) {
+        if ($this->request->filled('city')) {
             $this->city->addCity($this->request->get('city'));
         }
 
-        if ($this->request->has('tag')) {
+        if ($this->request->filled('tag')) {
             $this->tag->addTag($this->request->get('tag'));
         }
 
-        if ($this->request->has('salary')) {
+        if ($this->request->filled('salary')) {
             $this->addSalaryFilter($this->request->get('salary'), $this->request->get('currency'));
         }
 
-        if ($this->request->has('remote')) {
+        if ($this->request->filled('remote')) {
             $this->addRemoteFilter();
         }
 
         $this->score(new Random($this->sessionId, 2));
-        $this->sort(new Sort($this->getSort(), $this->getOrder()));
+        $this->score(new ScriptScore('_score'));
+        $this->sort(new Sort($this->sort, 'desc'));
 
         $this->setupFilters();
 
         // facet search
         $this->setupAggregations();
 
-        $this->size(self::PER_PAGE * ((int) $this->request->get('page', 1) - 1), self::PER_PAGE);
+        $this->size(self::PER_PAGE * (max(0, (int) $this->request->get('page', 1) - 1)), self::PER_PAGE);
 
         return parent::build();
     }
@@ -186,27 +240,7 @@ class SearchBuilder extends QueryBuilder
     {
         $this->aggs(new Aggs\Job\Location());
         $this->aggs(new Aggs\Job\Remote());
-        $this->aggs(new Aggs\Job\Tag());
-        $this->aggs(new Aggs\Job\Boost());
-    }
-
-    /**
-     * @return string
-     */
-    private function getSort()
-    {
-        $sort = $this->request->get('sort', '_score');
-
-        return in_array($sort, ['id', '_score', 'salary']) ? $sort : self::DEFAULT_SORT;
-    }
-
-    /**
-     * @return string
-     */
-    private function getOrder()
-    {
-        $order = $this->request->get('order', 'desc');
-
-        return in_array($order, ['asc', 'desc']) ? $order : 'desc';
+        $this->aggs(new Aggs\Job\Tag($this->languages));
+        $this->aggs(new Aggs\Job\TopSpot());
     }
 }

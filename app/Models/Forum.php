@@ -2,6 +2,7 @@
 
 namespace Coyote;
 
+use Coyote\Forum\Access;
 use Coyote\Models\Scopes\TrackForum;
 use Coyote\Models\Scopes\TrackTopic;
 use Illuminate\Database\Eloquent\Builder;
@@ -42,6 +43,7 @@ class Forum extends Model
     protected $fillable = [
         'parent_id',
         'name',
+        'title',
         'slug',
         'description',
         'section',
@@ -79,7 +81,15 @@ class Forum extends Model
      */
     public function access()
     {
-        return $this->hasMany('Coyote\Forum\Access');
+        return $this->hasMany(Access::class);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasManyThrough
+     */
+    public function groups()
+    {
+        return $this->hasManyThrough(Group::class, Access::class, 'forum_id', 'id', 'id');
     }
 
     /**
@@ -87,7 +97,7 @@ class Forum extends Model
      */
     public function permissions()
     {
-        return $this->hasMany('Coyote\Forum\Permission');
+        return $this->hasMany(\Coyote\Forum\Permission::class);
     }
 
     /**
@@ -155,60 +165,12 @@ class Forum extends Model
     }
 
     /**
-     * Determines if user can access to forum
-     *
-     * @param int $userId
-     * @return bool
-     */
-    public function userCanAccess($userId)
-    {
-        $usersId = $this->getUsersWithAccess();
-
-        if (empty($usersId)) {
-            return true;
-        } elseif (!$userId && count($usersId)) {
-            return false;
-        } else {
-            return in_array($userId, $usersId);
-        }
-    }
-
-    /**
-     * Filter users. Return only ids of users who have access to this forum.
-     *
-     * @param array $usersId
-     * @return array|bool
-     */
-    public function onlyUsersWithAccess(array $usersId)
-    {
-        if (empty($usersId)) {
-            return false;
-        }
-
-        $allowed = $this->getUsersWithAccess();
-        if (empty($allowed)) {
-            return $usersId;
-        }
-
-        return array_intersect($usersId, $allowed);
-    }
-
-    /**
-     * @param $userId
-     * @param $sessionId
+     * @param string $guestId
      * @return mixed
      */
-    public function markTime($userId, $sessionId)
+    public function markTime($guestId)
     {
-        $sql = $this->tracks()->select('marked_at');
-
-        if ($userId) {
-            $sql->where('user_id', $userId);
-        } else {
-            $sql->where('session_id', $sessionId);
-        }
-
-        return $sql->value('marked_at');
+        return $this->tracks()->select('marked_at')->where('guest_id', $guestId)->value('marked_at');
     }
 
     /**

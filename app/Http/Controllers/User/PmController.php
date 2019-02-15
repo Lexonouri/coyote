@@ -2,9 +2,9 @@
 
 namespace Coyote\Http\Controllers\User;
 
-use Coyote\Events\PmWasSent;
 use Coyote\Http\Factories\MediaFactory;
-use Coyote\Repositories\Contracts\AlertRepositoryInterface as AlertRepository;
+use Coyote\Notifications\PmCreatedNotification;
+use Coyote\Repositories\Contracts\NotificationRepositoryInterface as NotificationRepository;
 use Coyote\Repositories\Contracts\PmRepositoryInterface as PmRepository;
 use Coyote\Repositories\Contracts\UserRepositoryInterface as UserRepository;
 use Illuminate\Validation\Validator;
@@ -25,9 +25,9 @@ class PmController extends BaseController
     private $user;
 
     /**
-     * @var AlertRepository
+     * @var NotificationRepository
      */
-    private $alert;
+    private $notification;
 
     /**
      * @var PmRepository
@@ -36,15 +36,15 @@ class PmController extends BaseController
 
     /**
      * @param UserRepository $user
-     * @param AlertRepository $alert
+     * @param NotificationRepository $notification
      * @param PmRepository $pm
      */
-    public function __construct(UserRepository $user, AlertRepository $alert, PmRepository $pm)
+    public function __construct(UserRepository $user, NotificationRepository $notification, PmRepository $pm)
     {
         parent::__construct();
 
         $this->user = $user;
-        $this->alert = $alert;
+        $this->notification = $notification;
         $this->pm = $pm;
 
         $this->middleware(function (Request $request, $next) {
@@ -98,8 +98,8 @@ class PmController extends BaseController
                 $this->auth->pm_unread--;
 
                 // IF we have unread alert that is connected with that message... then we also have to mark it as read
-                if ($this->auth->alerts_unread) {
-                    $this->alert->markAsReadByUrl($this->userId, route('user.pm.show', [$row['id']], false));
+                if ($this->auth->notifications_unread) {
+                    $this->notification->markAsReadByUrl($this->userId, route('user.pm.show', [$row['id']], false));
                 }
             }
         }
@@ -158,7 +158,7 @@ class PmController extends BaseController
     public function save(Request $request)
     {
         $validator = $this->getValidationFactory()->make($request->all(), [
-            'recipient'          => 'required|username|user_exist',
+            'recipient'          => 'required|user_exist',
             'text'               => 'required',
             'root_id'            => 'sometimes|exists:pm'
         ]);
@@ -170,30 +170,16 @@ class PmController extends BaseController
         });
 
         $this->validateWith($validator);
+        $recipient = $this->user->findByName($request->get('recipient'));
 
-        return $this->transaction(function () use ($request) {
-            $recipient = $this->user->findByName($request->get('recipient'));
-
-            $pm = $this->pm->submit($this->auth, $request->all() + ['author_id' => $recipient->id]);
-
-            $excerpt = excerpt($text = $this->getParser()->parse($request->get('text')));
-
-            // we need to send notification to recipient
-            app('alert.pm')->with([
-                'user_id'     => $pm->author_id,
-                'sender_id'   => $this->auth->id,
-                'sender_name' => $this->auth->name,
-                'subject'     => $excerpt,
-                'text'        => $text,
-                'url'         => route('user.pm.show', [$pm->id - 1], false)
-            ])->notify();
-
-            // broadcast event: we can use it to show message in real time
-            event(new PmWasSent($pm->author_id, $this->auth->id, $this->auth->name, $excerpt));
-
-            // redirect to sent message...
-            return redirect()->route('user.pm.show', [$pm->id])->with('success', 'Wiadomość została wysłana');
+        $pm = $this->transaction(function () use ($request, $recipient) {
+            return $this->pm->submit($this->auth, $request->all() + ['author_id' => $recipient->id]);
         });
+
+        $recipient->notify(new PmCreatedNotification($pm));
+
+        // redirect to sent message...
+        return redirect()->route('user.pm.show', [$pm->id])->with('success', 'Wiadomość została wysłana');
     }
 
     /**

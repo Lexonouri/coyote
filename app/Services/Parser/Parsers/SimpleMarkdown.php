@@ -75,17 +75,16 @@ class SimpleMarkdown extends Markdown implements ParserInterface
         return null;
     }
 
-    protected function inlineStrikethrough($excerpt)
-    {
-        return null;
-    }
-
     /**
      * @param string $text
      * @return mixed|string
      */
     public function parse($text)
     {
+        // oryginalny mechanizm parsowania markdown zawiera bugi. nie parsuje np.
+        // nawiasu na koncu linku
+        $this->setUrlsLinked(false);
+
         return $this->line($text);
     }
 }

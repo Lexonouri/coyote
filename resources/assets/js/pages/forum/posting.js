@@ -1,4 +1,5 @@
 import declination from '../../components/declination';
+import preventDuplicate from '../../components/prevent-duplicate';
 
 $(function () {
     'use strict';
@@ -11,6 +12,8 @@ $(function () {
 
         $.post($(this).data('url'), {'text': $('#submit-form').find('textarea[name="text"]').val()}, function(html) {
             $('#preview').find('.post-content').html(html);
+
+            Prism.highlightAll();
         });
     });
 
@@ -251,33 +254,33 @@ $(function () {
     });
 
     $('.vote-up').click(function() {
-        var $this = $(this);
-
-        $.post($this.attr('href'), function(json) {
-            $this.toggleClass('on');
-            $this.prev().text(json.count);
-        })
-            .error(function(event) {
+        preventDuplicate(() => {
+            $.post($(this).attr('href'), json => {
+                $(this).toggleClass('on');
+                $(this).prev().text(json.count);
+            })
+            .error(event => {
                 if (typeof event.responseJSON.error !== 'undefined') {
                     error(event.responseJSON.error);
                 }
             });
+        });
 
         return false;
     });
 
     $('.vote-accept[href]').click(function() {
-        var $this = $(this);
-
-        $.post($this.attr('href'), function() {
-            $this.toggleClass('on');
-            $('.vote-accept').not($this).removeClass('on');
-        })
+        preventDuplicate(() => {
+            $.post($(this).attr('href'), () => {
+                $(this).toggleClass('on');
+                $('.vote-accept').not(this).removeClass('on');
+            })
             .error(function(event) {
                 if (typeof event.responseJSON.error !== 'undefined') {
                     error(event.responseJSON.error);
                 }
             });
+        });
 
         return false;
     });
@@ -452,6 +455,8 @@ $(function () {
         $.post($form.attr('action'), $form.serialize(), function(html) {
             $post.html(html);
             $('.btn-fast-edit[data-post-id="' + $post.data('post-id') + '"]').removeClass('active');
+
+            Prism.highlightAll();
         })
         .error(function(event) {
             $('button[type=submit]', $form).removeAttr('disabled').text('Zapisz');

@@ -2,31 +2,25 @@
 
 namespace Coyote\Notifications;
 
-use Coyote\Alert;
 use Coyote\Flag;
-use Coyote\Services\Alert\DatabaseChannel;
+use Coyote\Services\Notification\DatabaseChannel;
+use Coyote\Services\Notification\Notification;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Channels\BroadcastChannel;
 use Illuminate\Notifications\Messages\BroadcastMessage;
-use Illuminate\Notifications\Notification;
 
 class FlagCreatedNotification extends Notification implements ShouldQueue, ShouldBroadcast
 {
     use Queueable;
 
-    const ID = Alert::FLAG;
+    const ID = \Coyote\Notification::FLAG;
 
     /**
      * @var Flag
      */
     private $flag;
-
-    /**
-     * @var array
-     */
-    private $broadcast = [];
 
     /**
      * @param Flag $flag
@@ -44,7 +38,7 @@ class FlagCreatedNotification extends Notification implements ShouldQueue, Shoul
      */
     public function via($user)
     {
-        $this->broadcast[] = 'user:' . $user->id;
+        $this->broadcastChannel = 'user:' . $user->id;
 
         return $this->channels();
     }
@@ -88,33 +82,13 @@ class FlagCreatedNotification extends Notification implements ShouldQueue, Shoul
     }
 
     /**
-     * Get the channels the event should be broadcast on.
-     *
-     * @return array
-     */
-    public function broadcastOn()
-    {
-        return $this->broadcast;
-    }
-
-    /**
-     * Get the broadcast event name.
-     *
-     * @return string
-     */
-    public function broadcastAs()
-    {
-        return 'alert';
-    }
-
-    /**
      * @param \Coyote\User $user
      * @return BroadcastMessage
      */
-    public function toBroadcast($user)
+    public function toBroadcast()
     {
         return new BroadcastMessage([
-            'headline'  => $user->name . ' dodał nowy raport',
+            'headline'  => $this->flag->user->name . ' dodał nowy raport',
             'subject'   => $this->flag->type->name,
             'url'       => $this->notificationUrl()
         ]);
@@ -126,13 +100,5 @@ class FlagCreatedNotification extends Notification implements ShouldQueue, Shoul
     protected function channels()
     {
         return [DatabaseChannel::class, BroadcastChannel::class];
-    }
-
-    /**
-     * @return string
-     */
-    protected function notificationUrl()
-    {
-        return route('user.alerts.url', [$this->id]);
     }
 }

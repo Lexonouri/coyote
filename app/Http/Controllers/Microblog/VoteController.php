@@ -3,6 +3,7 @@
 namespace Coyote\Http\Controllers\Microblog;
 
 use Coyote\Http\Controllers\Controller;
+use Coyote\Notifications\Microblog\VotedNotification;
 use Coyote\Services\UrlBuilder\UrlBuilder;
 use Illuminate\Http\Request;
 use Coyote\Services\Stream\Activities\Vote as Stream_Vote;
@@ -36,13 +37,13 @@ class VoteController extends Controller
             return response()->json(['error' => 'Nie możesz głosować na wpisy swojego autorstwa.'], 500);
         }
 
-        $this->transaction(function () use ($vote, $microblog, $request) {
+        $vote = $this->transaction(function () use ($vote, $microblog, $request) {
             if ($vote) {
                 $vote->delete();
 
                 $microblog->votes--;
             } else {
-                $microblog->voters()->create(['user_id' => $this->userId, 'ip' => $request->ip()]);
+                $vote = $microblog->voters()->create(['user_id' => $this->userId, 'ip' => $request->ip()]);
                 $microblog->votes++;
             }
 
@@ -54,10 +55,8 @@ class VoteController extends Controller
                 $url = UrlBuilder::microblog($microblog);
                 $object = (new Stream_Microblog())->map($microblog);
 
-                app('reputation.microblog.vote')->map($microblog)->setUrl($url)->setPositive(!$vote)->save();
+                app('reputation.microblog.vote')->map($microblog)->setUrl($url)->setPositive($vote->wasRecentlyCreated)->save();
             } else {
-                $url = UrlBuilder::microblogComment($microblog->parent, $microblog->id);
-
                 $object = (new Stream_Comment())->map($microblog);
                 $target = (new Stream_Microblog())->map($microblog->parent);
             }
@@ -67,17 +66,12 @@ class VoteController extends Controller
             // put this to activity stream
             stream(Stream_Vote::class, $object, $target);
 
-            if (!$vote) {
-                app('alert.microblog.vote')
-                    ->setMicroblogId($microblog->id)
-                    ->addUserId($microblog->user_id)
-                    ->setSubject(excerpt($microblog->html))
-                    ->setSenderId($this->userId)
-                    ->setSenderName($this->auth->name)
-                    ->setUrl($url)
-                    ->notify();
-            }
+            return $vote;
         });
+
+        if ($vote->wasRecentlyCreated) {
+            $microblog->user->notify(new VotedNotification($vote));
+        }
 
         return response()->json(['count' => $microblog->voters()->count()]);
     }

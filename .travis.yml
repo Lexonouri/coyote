@@ -1,48 +1,51 @@
 sudo: true
 language: php
 php:
-  - 7.0
+  - 7.2
+
+cache:
+  directories:
+    - node_modules
+    - vendor
+    - yarn
 
 services:
   - postgresql
+  - mongodb
   - redis-server
 
 addons:
-  postgresql: "9.4"
+  postgresql: "9.6"
   apt:
     packages:
-      - oracle-java8-set-default
+      - oracle-java9-set-default
 
 env:
-  - NODE_RELEASE=6.x
+  - NODE_RELEASE=8.x
 
 before_install:
-  - echo "extension=mongodb.so" >> ~/.phpenv/versions/$(phpenv version-name)/etc/php.ini
+  - cp .env.testing .env
   - sudo rm -rf ~/.nvm
   - curl -sL "https://deb.nodesource.com/setup_${NODE_RELEASE}" | sudo -E bash -
   - sudo apt-get install -y nodejs
   - curl -O https://artifacts.elastic.co/downloads/elasticsearch/elasticsearch-5.1.2.deb && sudo dpkg -i --force-confnew elasticsearch-5.1.2.deb && sudo service elasticsearch restart
   - sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
-  - echo "deb http://repo.mongodb.org/apt/ubuntu precise/mongodb-org/3.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.2.list
+  - curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+  - echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
   - sudo apt-get update
-  - sudo apt-get install -y mongodb-org=3.2.12 mongodb-org-server=3.2.12 mongodb-org-shell=3.2.12 mongodb-org-mongos=3.2.12 mongodb-org-tools=3.2.12
-  - sleep 15
-  - mongo --version
+  - sudo apt-get install -y yarn
 
 install:
   - composer install
-  - sudo npm -g install npm@next
 
 before_script:
-  - sudo make install-gulp
+  - sudo yarn install
   - psql -c 'create database coyote_test;' -U postgres
-  - cp .env.testing .env
   - cp tests/acceptance.suite.yml.travis tests/acceptance.suite.yml
-  - php artisan migrate --seed --env="testing"
+  - php artisan migrate --seed --quiet
   - php vendor/bin/codecept build
   - make file-permission
   - make assets-production
-  - php artisan currency:exchange
   - phantomjs --webdriver=4444 2>&1 >/dev/null &
   - sleep 5
   - php -S 127.0.0.1:8000 -t public/ 2>&1 >/dev/null &

@@ -74,7 +74,6 @@ class PurgeSessionsCommand extends Command
         $lifetime = config('session.lifetime') * 60;
 
         $this->db->transaction(function () use ($result, $lifetime) {
-            $this->db->unprepared('TRUNCATE sessions');
             $values = [];
 
             foreach ($result as $session) {
@@ -83,7 +82,7 @@ class PurgeSessionsCommand extends Command
                 } else {
                     $this->extend($session);
 
-                    $path = str_limit(parse_url($session->url, PHP_URL_PATH), 999, '');
+                    $path = str_limit($session->path, 999, '');
 
                     $values[] = array_merge(
                         array_only($session->toArray(), ['id', 'user_id', 'robot']),
@@ -91,6 +90,8 @@ class PurgeSessionsCommand extends Command
                     );
                 }
             }
+
+            $this->db->unprepared('DELETE FROM sessions');
 
             // make a copy of sessions in postgres for faster calculations (number of visitors for give page etc.)
             $this->db->table('sessions')->insert($values);
@@ -115,6 +116,9 @@ class PurgeSessionsCommand extends Command
         $user->timestamps = false;
         // update only this field:
         $user->visited_at = Carbon::createFromTimestamp($session->updatedAt);
+        $user->ip = $session->ip;
+        $user->browser = $session->browser;
+        $user->is_online = true;
 
         $user->save();
     }

@@ -4,21 +4,18 @@
 [![Build Status](https://travis-ci.org/adam-boduch/coyote.svg?branch=master)](https://travis-ci.org/adam-boduch/coyote)
 [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/adam-boduch/coyote/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/adam-boduch/coyote/?branch=master)
 
-Coyote to nazwa systemu obslugujacego serwis 4programmers.net.
+Coyote to nazwa systemu obsługującego serwis 4programmers.net.
 
 ## Wymagania
 
 * PHP 7
     * php-gd
-    * php-mongodb
     * php-mcrypt
     * php-curl
     * php-mbstring
     * php-pgsql
-    * php-mongodb
     * php-xml
 * PostgreSQL >= 9.4
-* MongoDB >= 2.7
 * composer
 * node.js
 * npm
@@ -32,19 +29,12 @@ Coyote to nazwa systemu obslugujacego serwis 4programmers.net.
 
 ## Instalacja
 
-1. `sudo apt-get -y install php-gd`
-2. `sudo apt-get -y install php-mbstring`
-2. `sudo apt-get -y install php-mcrypt`
-2. `sudo apt-get -y install php-pear`
-2. `sudo apt-get -y install php-curl`
-3. `sudo apt-get -y install php-mongodb`
-4. `sudo apt-get -y install php-pgsql`
-4. `sudo apt-get -y install php-xml`
-6. `git clone https://github.com/adam-boduch/coyote.git .`
-7. `psql -c 'create database coyote;' -U postgres`
-8. `cp .env.default .env` (plik .env zawiera konfiguracje bazy danych PostgreSQL oraz MongoDB)
-9. `make install` (na produkcji) lub `make install-dev` (bez minifikacji JS oraz CSS)
-10. `php artisan key:generate` (generowanie unikalnego klucza, który posłuży do szyfrowania danych)
+1. `sudo apt-get -y install php-gd php-mbstring php-mcrypt php-pear php-curl php-pgsql php-xml`
+2. `git clone https://github.com/adam-boduch/coyote.git .`
+3. `psql -c 'create database coyote;' -U postgres`
+4. `cp .env.default .env` (plik .env zawiera konfiguracje bazy danych PostgreSQL)
+5. `make install` (na produkcji) lub `make install-dev` (bez minifikacji JS oraz CSS)
+6. `php artisan key:generate` (generowanie unikalnego klucza, który posłuży do szyfrowania danych)
 
 ### Problemy podczas instalacji
 #### Class 'MongoClient' not found
@@ -69,18 +59,35 @@ Działanie projektu wymaga zainstalowania serwera HTTP takiego jak Apache czy Ng
 
 ## Vagrant
 
+### Instalacja Docker
+
+W folderze projektu wykonujemy następujące polecenia:
+1. `cp .env.docker .env`
+2. `cp Vagrantfile.docker Vagrantfile`
+
+3. `vagrant up`
+4. `vagrant ssh`
+5. `cd /vagrant`
+
+6. `sudo docker-compose build`
+7. `sudo docker-compose up -d`
+8. `sudo docker-compose exec php make install-dev`
+9. `sudo docker-compose exec php php artisan key:generate`
+10. `sudo docker-compose exec php php artisan es:create`
+11. `sudo docker-compose exec php php artisan es:mapping`
+
+Strona jest dostępna w przeglądarce pod adresem: `175.0.0.10:8880`
+
+### Instalacja Puppet
+
 Aby nie instalować wszystkich pakietów lokalnie, można skorzystać z Vagranta. Obecna wersja nie umożliwia jeszcze całkowitej instalacji z wnętrza Vagranta (jeśli wiesz, jak sprawić, by `npm install` i `gulp` działało na Vagrancie pod systemem Windows, daj znać), więc wymagane są następujące narzędzia zainstalowane lokalnie:
 * Vagrant
 * npm
-* gulp (instalowane przez `npm install -g gulp`)
-
-### Instalacja
 
 1. vagrant up
 2. npm install
-3. gulp
-4. w `etc/hosts` dodajemy wpis `192.168.10.10  coyote.dev`
-5. w przeglądarce pod adresem `coyote.dev` powinniśmy zobaczyć działającą wersję Coyote
+3. w `etc/hosts` dodajemy wpis `192.168.10.10  coyote.dev`
+4. w przeglądarce pod adresem `coyote.dev` powinniśmy zobaczyć działającą wersję Coyote
 
 ## Testowanie
 
@@ -127,10 +134,10 @@ Po instalacji Elasticsearch, konieczne jest utworzenie indeksu oraz typów. Wyko
 1. `php artisan es:create`
 2. `php artisan es:mapping`
 
-## Jak mozesz pomoc?
+## Jak możesz pomóc?
 
-Zachecamy do aktywnego udzialu w rozwoju projektu. Zajrzyj na zakladke *Issues* i zobacz jakie zadanie mozesz zrealizowac. Realizujemy tylko te zadanie ktore jest zaakceptowane i przypisane do wersji 2.0..
+Zachęcamy do aktywnego udziału w rozwoju projektu. Zajrzyj na zakładkę *Issues* i zobacz jakie zadanie możesz zrealizować. Realizujemy tylko te zadania, które są zaakceptowane i przypisane do wersji 2.0.
 
-1. Utworz fork repozytorium
-2. Wprowadz zmiany
+1. Utwórz fork repozytorium
+2. Wprowadź zmiany
 3. Dodaj pull request

@@ -46,7 +46,7 @@ class BoostJobOffer implements ShouldQueue
             $pdf = null;
 
             // set up invoice only if firm name was provided. it's required!
-            if ($event->payment->invoice->name) {
+            if ($event->payment->invoice_id && $event->payment->invoice->name) {
                 // set up invoice number since it's already paid.
                 $this->enumerator->enumerate($event->payment->invoice);
                 // create pdf
@@ -59,10 +59,18 @@ class BoostJobOffer implements ShouldQueue
             $event->payment->starts_at = Carbon::now();
             $event->payment->ends_at = Carbon::now()->addDays($event->payment->days);
 
+            if ($event->payment->coupon_id) {
+                $event->payment->coupon->delete();
+            }
+
             $event->payment->save();
 
-            // boost job offer so it's on the top of the list
-            $event->payment->job->boost = true;
+            foreach ($event->payment->plan->benefits as $benefit) {
+                if ($benefit !== 'is_extended_publish') {
+                    $event->payment->job->{$benefit} = true;
+                }
+            }
+
             $event->payment->job->boost_at = Carbon::now();
             $event->payment->job->deadline_at = max($event->payment->job->deadline_at, $event->payment->ends_at);
             $event->payment->job->save();
@@ -70,11 +78,11 @@ class BoostJobOffer implements ShouldQueue
             // payment is done. remove any pending payments (if any...)
             $event->payment->job->payments()->where('status_id', Payment::NEW)->delete();
 
-            // reindex job offer
-            event(new JobWasSaved($event->payment->job));
+            // index job offer
+            $event->payment->job->putToIndex();
 
             // send email with invoice
-            $event->user->notify(
+            $event->payment->job->user->notify(
                 new SuccessfulPaymentNotification($event->payment, $pdf)
             );
         });

@@ -3,6 +3,7 @@
 @import "../helpers/variables";
 @import "../vendor/font-awesome/variables";
 @import "../vendor/bootstrap/variables";
+@import "../vendor/intl-tel-input";
 @import "../components/sidemenu";
 @import "../components/search";
 @import "../components/metadata";
@@ -10,16 +11,17 @@
 @import "job/submit";
 @import "job/payment";
 @import "job/application";
+@import "job/pricing";
+@import "job/business";
 
 .benefits,
-.features {
+.features,
+.about-items {
   .list-group-item {
     border: none;
     font-size: 14px;
 
     i {
-      font-size: 120%;
-
       &.fa-remove {
         color: #ddd;
       }
@@ -33,10 +35,49 @@
   }
 }
 
+.about-items {
+  margin-top: 10px;
+  margin-bottom: 5px;
+
+  .list-group-item {
+    font-size: $font-size-base;
+    padding-top: 7px;
+    padding-bottom: 7px;
+
+    > p {
+      padding-left: 10px;
+      display: inline-block;
+      vertical-align: top;
+      overflow: hidden;
+
+      .fa {
+        color: $text-muted;
+        vertical-align: middle;
+        font-size: 16px;
+      }
+
+      small {
+        font-size: 11px;
+        display: block;
+        text-transform: uppercase;
+        color: $text-muted;
+      }
+
+      strong {
+        color: $gray-light;
+      }
+    }
+
+    a {
+      color: inherit;
+    }
+  }
+}
+
 // Border around buttons
 // ---------------------------
 
-.outline {
+.edge {
   border-radius: $border-radius-large;
   background-color: darken($gray-lighter, 4%);
   padding: 5px;

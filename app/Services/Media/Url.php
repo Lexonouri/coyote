@@ -2,15 +2,14 @@
 
 namespace Coyote\Services\Media;
 
-use Coyote\Services\Thumbnail\Factory as Thumbnail;
-use Coyote\Services\Thumbnail\Objects\ObjectInterface;
+use Intervention\Image\ImageManager;
 
 class Url
 {
     /**
-     * @var Thumbnail
+     * @var ImageManager
      */
-    protected $thumbnail;
+    protected $imageManager;
 
     /**
      * @var File
@@ -18,19 +17,35 @@ class Url
     protected $file;
 
     /**
-     * @param Thumbnail $thumbnail
+     * @var null|bool
+     */
+    protected $secure;
+
+    /**
+     * @param ImageManager $imageManager
      * @param File $file
      */
-    public function __construct(Thumbnail $thumbnail, File $file)
+    public function __construct(ImageManager $imageManager, File $file)
     {
-        $this->thumbnail = $thumbnail;
+        $this->imageManager = $imageManager;
         $this->file = $file;
+    }
+
+    /**
+     * @param bool|null $flag
+     * @return $this
+     */
+    public function secure($flag)
+    {
+        $this->secure = $flag;
+
+        return $this;
     }
 
     /**
      * Make thumbnail and return full url.
      *
-     * @param ObjectInterface $template
+     * @param string $template
      * @return string|null
      */
     public function thumbnail($template)
@@ -39,7 +54,17 @@ class Url
             return null;
         }
 
-        return $this->thumbnail->url($template)->make((string) $this);
+        $thumbnailPath = $this->thumbnailPath($template);
+
+        if (!file_exists($this->file->path($thumbnailPath))) {
+            $class = config("imagecache.templates.$template");
+            $filter = new $class;
+
+            $image = $this->imageManager->make($this->file->path());
+            $image->filter($filter)->save($this->file->path($thumbnailPath));
+        }
+
+        return cdn($this->publicPath() . '/' . $thumbnailPath);
     }
 
     /**
@@ -63,10 +88,24 @@ class Url
      */
     private function makeUrl()
     {
+        if (!$this->file->getFilename()) {
+            return ''; // because __toString() requires string value
+        }
+
         if ($this->file->getDownloadUrl() && !$this->file->isImage()) {
             return $this->file->getDownloadUrl();
         }
 
-        return cdn($this->publicPath() . '/' . $this->file->relative());
+        return cdn($this->publicPath() . '/' . $this->file->relative(), $this->secure);
+    }
+
+    /**
+     * @param string $template
+     * @return string
+     */
+    protected function thumbnailPath($template)
+    {
+        $pathinfo = pathinfo($this->file->relative());
+        return $pathinfo['dirname'] . '/' . $pathinfo['filename'] . '-' . $template . '.' . $pathinfo['extension'];
     }
 }

@@ -2,15 +2,19 @@
 
 namespace Coyote\Http\Forms\Job;
 
+use Carbon\Carbon;
 use Coyote\Country;
 use Coyote\Currency;
 use Coyote\Job;
+use Coyote\Repositories\Contracts\CountryRepositoryInterface as CountryRepository;
 use Coyote\Repositories\Contracts\FeatureRepositoryInterface as FeatureRepository;
 use Coyote\Services\FormBuilder\Form;
 use Coyote\Services\FormBuilder\FormEvents;
 use Coyote\Services\Geocoder\GeocoderInterface;
 use Coyote\Services\Parser\Helpers\City;
 use Coyote\Tag;
+use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Validation\Rule;
 
 class JobForm extends Form
 {
@@ -44,15 +48,22 @@ class JobForm extends Form
     private $feature;
 
     /**
+     * @var CountryRepository
+     */
+    private $country;
+
+    /**
      * @param GeocoderInterface $geocoder
      * @param FeatureRepository $feature
+     * @param CountryRepository $country
      */
-    public function __construct(GeocoderInterface $geocoder, FeatureRepository $feature)
+    public function __construct(GeocoderInterface $geocoder, FeatureRepository $feature, CountryRepository $country)
     {
         parent::__construct();
 
         $this->geocoder = $geocoder;
         $this->feature = $feature;
+        $this->country = $country;
 
         $this->addEventListener(FormEvents::POST_SUBMIT, function (JobForm $form) {
             // call macro and flush collection items
@@ -87,6 +98,13 @@ class JobForm extends Form
             }
 
             $this->data->country()->associate((new Country())->find($form->get('country_id')->getValue()));
+
+            // set default deadline_at date time, only if offer was not publish yet.
+            if (!$this->data->is_publish) {
+                $this->data->plan_id = $form->get('plan_id')->getValue();
+
+                $this->data->deadline_at = Carbon::now()->addDays($this->data->plan->length);
+            }
         });
 
         $this->addEventListener(FormEvents::PRE_RENDER, function (JobForm $form) {
@@ -165,7 +183,7 @@ class JobForm extends Form
             ])
             ->add('country_id', 'select', [
                 'rules' => 'required|integer',
-                'choices' => Country::getCountriesList()
+                'choices' => $this->country->pluck('name', 'id')
             ])
             ->add('city', 'text', [
                 'rules' => 'string|city',
@@ -233,17 +251,6 @@ class JobForm extends Form
                     'class' => 'input-inline'
                 ]
             ])
-            ->add('deadline', 'number', [
-                'label' => 'Data ważnosci oferty',
-                'rules' => 'integer|min:1|max:365',
-                'help' => 'Oferta będzie widoczna na stronie do dnia <strong>${ deadlineDate }</strong>',
-                'attr' => [
-                    'min' => 1,
-                    'max' => 365,
-                    'class' => 'input-inline',
-                    'v-model' => 'job.deadline'
-                ]
-            ])
             ->add('tags', 'collection', [
                 'child_attr' => [
                     'type' => 'child_form',
@@ -279,8 +286,17 @@ class JobForm extends Form
                 'style' => 'height: 40px'
             ])
             ->add('email', 'email', [
+                'label' => 'Email',
                 'rules' => 'sometimes|required|email',
-                'help' => 'Podaj adres e-mail na jaki wyślemy Ci informacje o kandydatach. Adres e-mail nie będzie widoczny dla osób postronnych.'
+                'help' => 'Adres e-mail nie będzie widoczny dla osób postronnych.'
+            ])
+            ->add('phone', 'tel', [
+                'rules' => 'sometimes|string|max:50',
+                'label' => 'Numer telefonu',
+                'help' => 'Wpisz swój numer telefonu, a wyślemy Ci powiadomienie o nadesłanej aplikacji.',
+                'attr' => [
+                    'placeholder' => 'Numer telefonu'
+                ]
             ]);
 
         $this->setupPlanFields();
@@ -299,26 +315,35 @@ class JobForm extends Form
         }
     }
 
+    /**
+     * @param Validator $validator
+     */
+    protected function failedValidation(Validator $validator)
+    {
+        if ($validator->getMessageBag()->has('tags.*')) {
+            $validator->getMessageBag()->add('tags', $validator->getMessageBag()->first('tags.*'));
+        }
+
+        parent::failedValidation($validator);
+    }
+
     protected function setupPlanFields()
     {
         // can't show that fields if plan is enabled
-        if ($this->data->isPlanOngoing()) {
+        if ($this->data->is_publish) {
             return;
         }
 
         $this
-            ->add('plan_id', 'checkbox', [
-                'rules' => 'bool',
-                'label' => 'Tak, chciałbym sokrzystać z opcji promowania ogłoszenia.',
+            ->add('plan_id', 'hidden', [
+                'rules' => [
+                    'required',
+                    'int',
+                    Rule::exists('plans', 'id')->where('is_active', 1)
+                ],
                 'attr' => [
                     'id' => 'plan_id',
                     'v-model' => 'job.plan_id'
-                ]
-            ])
-            ->add('plan_length', 'hidden', [
-                'rules' => 'integer|min:3',
-                'attr' => [
-                    'v-model' => 'job.plan_length'
                 ]
             ]);
     }

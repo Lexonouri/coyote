@@ -2,7 +2,7 @@
 
 namespace Coyote;
 
-use Coyote\Post\Attachment;
+use Coyote\Post\Subscriber;
 use Coyote\Services\Elasticsearch\CharFilters\PostFilter;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -15,9 +15,11 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property int $score
  * @property int $edit_count
  * @property int $editor_id
- * @property string $created_at
- * @property string $deleted_at
- * @property string $updated_at
+ * @property int $deleter_id
+ * @property string $delete_reason
+ * @property \Carbon\Carbon $created_at
+ * @property \Carbon\Carbon $deleted_at
+ * @property \Carbon\Carbon $updated_at
  * @property string $user_name
  * @property string $text
  * @property string $html
@@ -28,6 +30,9 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property \Coyote\Topic $topic
  * @property \Coyote\Post\Attachment[] $attachments
  * @property \Coyote\Post\Vote[] $votes
+ * @property \Coyote\Post\Comment[] $comments
+ * @property \Coyote\User $user
+ * @property \Coyote\Post\Accept $accept
  */
 class Post extends Model
 {
@@ -107,6 +112,16 @@ class Post extends Model
      */
     private $html = null;
 
+    public static function boot()
+    {
+        parent::boot();
+
+        static::restoring(function (Post $post) {
+            $post->deleter_id = null;
+            $post->delete_reason = null;
+        });
+    }
+
     /**
      * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
@@ -120,7 +135,7 @@ class Post extends Model
      */
     public function subscribers()
     {
-        return $this->hasMany('Coyote\Post\Subscriber');
+        return $this->hasMany(Subscriber::class);
     }
 
     /**
@@ -235,6 +250,19 @@ class Post extends Model
     }
 
     /**
+     * @param int $userId
+     * @param string|null $reason
+     */
+    public function deleteWithReason(int $userId, ?string $reason)
+    {
+        $this->deleter_id = $userId;
+        $this->delete_reason = $reason;
+        $this->{$this->getDeletedAtColumn()} = $this->freshTimestamp();
+
+        $this->save();
+    }
+
+    /**
      * Return data to index in elasticsearch
      *
      * @return array
@@ -245,9 +273,9 @@ class Post extends Model
         $body = $this->parentGetIndexBody();
 
         // additionally index few fields from topics table...
-        $topic = $this->topic()->first(['subject', 'slug', 'forum_id', 'id', 'first_post_id']);
+        $topic = $this->topic()->withTrashed()->first(['subject', 'slug', 'forum_id', 'id', 'first_post_id']);
         // we need to index every field from posts except:
-        $body = array_except($body, ['deleted_at', 'edit_count', 'editor_id']);
+        $body = array_except($body, ['deleted_at', 'edit_count', 'editor_id', 'delete_reason', 'deleter_id']);
 
         if ($topic->first_post_id == $body['id']) {
             $body['tags'] = $topic->tags()->pluck('name');

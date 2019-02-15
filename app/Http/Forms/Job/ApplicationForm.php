@@ -99,7 +99,7 @@ class ApplicationForm extends Form implements ValidatesWhenSubmitted
             ])
             ->add('cv', 'hidden', [
                 'label' => 'CV/Resume',
-                'help' => 'CV/résumé z rozszerzeniem *.pdf, *.doc, *.docx lub *.rtf.',
+                'help' => 'CV/résumé z rozszerzeniem *.pdf, *.doc, *.docx lub *.rtf. Maksymalnie 5 MB.',
                 'attr' => [
                     'placeholder' => 'Kliknij, aby dodać załącznik',
                     'id' => 'uploader',
@@ -131,9 +131,8 @@ class ApplicationForm extends Form implements ValidatesWhenSubmitted
                 'label' => 'Wiadomość dla pracodawcy/zleceniodawcy',
                 'help' => 'Taką wiadomość otrzyma osoba, która wystawiła ogłoszenie'
             ])
-            ->add('cc', 'checkbox', [
-                'label' => 'Wyślij kopię e-maila również do mnie',
-                'value' => 1
+            ->add('remember', 'checkbox', [
+                'label' => 'Zapamiętaj dane podane w formularzu'
             ])
             ->add('submit', 'submit', [
                 'label' => 'Zapisz',

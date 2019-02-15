@@ -14,7 +14,7 @@ class AdBuilder extends SearchBuilder
      */
     public function boostTags(array $tags)
     {
-        $this->should(new QueryString(implode(' ', $tags), ['title^2', 'tags^2', 'description'], 3));
+        $this->should(new QueryString(implode(' ', $tags), ['title^4', 'tags^2', 'description'], 3));
     }
 
     /**
@@ -23,7 +23,7 @@ class AdBuilder extends SearchBuilder
     public function build()
     {
         // only premium offers
-        $this->must(new Term('boost', true));
+        $this->must(new Term('is_ads', true));
 
         $this->score(new Random());
         $this->size(0, 4);
@@ -43,10 +43,5 @@ class AdBuilder extends SearchBuilder
         ]);
 
         return QueryBuilder::build();
-    }
-
-    public function setSort($sort)
-    {
-        $this->sort($sort);
     }
 }

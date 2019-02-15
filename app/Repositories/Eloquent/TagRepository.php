@@ -32,13 +32,30 @@ class TagRepository extends Repository implements TagRepositoryInterface
      */
     public function multiInsert(array $tags)
     {
-        $tagsId = [];
+        $ids = [];
 
         foreach ($tags as $name) {
             $tag = $this->model->firstOrCreate(['name' => $name]);
-            $tagsId[] = $tag->id;
+
+            $ids[] = $tag->id;
         }
 
-        return $tagsId;
+        return $ids;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getCategorizedTags(array $tags)
+    {
+        return $this
+            ->model
+            ->selectRaw('name, logo, COUNT(*) AS weight')
+                ->join('job_tags', 'tag_id', '=', 'tags.id')
+            ->whereIn('name', $tags)
+            ->whereNotNull('category_id')
+            ->groupBy('name')
+            ->groupBy('logo')
+            ->get();
     }
 }

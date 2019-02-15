@@ -14,6 +14,8 @@ class VerifyCsrfToken extends BaseVerifier
     protected $except = [
         '/User/Settings/Ajax',
         '/Microblog/Comment/Show/*',
-        '/Forum/Comment/*'
+        '/Forum/Comment/*',
+        '/Praca/Payment/Status',
+        '/mailgun/permanent-failure'
     ];
 }

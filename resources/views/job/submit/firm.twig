@@ -1,4 +1,6 @@
 {% extends 'job.base' %}
+
+{% import 'components.widgets' as widgets %}
 {% block title %}Informacje o firmie{{ parent() }}{% endblock %}
 
 {% block container %}
@@ -99,7 +101,22 @@
                     </div>
 
                     {{ form_row(form.website) }}
+                    {{ form_row(form.industries) }}
                     {{ form_row(form.description) }}
+
+                    <div class="form-group form-group-border" v-show="firm.is_agency == 0">
+                        {{ form_label(form.gallery) }}
+
+                        <div class="row">
+                            <div class="col-sm-2" v-for="photo in firm.gallery">
+                                <input type="hidden" name="gallery[]" :value="photo.file">
+
+                                <vue-thumbnail :url="photo.url" :file="photo.file" upload-url="{{ route('firm.gallery') }}" @upload="onThumbnailUploaded" @delete="onThumbnailDeleted"></vue-thumbnail>
+                            </div>
+                        </div>
+                    </div>
+
+                    {{ form_row(form.youtube_url) }}
                     {{ form_row(form.employees) }}
                     {{ form_row(form.founded) }}
                     {{ form_row(form.headline) }}
@@ -188,11 +205,12 @@
         };
     </script>
 
-    <script src="//cdnjs.cloudflare.com/ajax/libs/vue/2.1.10/vue.min.js"></script>
+    {{ widgets.vue() }}
     <script src="//cdn.tinymce.com/4/tinymce.min.js"></script>
     <script src="//maps.googleapis.com/maps/api/js?key={{ config('services.google-maps.key') }}&sensor=false"></script>
 
     <script src="{{ cdn('js/job-submit.js') }}"></script>
 
     {% include 'job.submit.partials.navigation' %}
+    {% include 'job.submit.partials.chat' %}
 {% endblock %}

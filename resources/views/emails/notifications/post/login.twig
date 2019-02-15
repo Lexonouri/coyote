@@ -1,0 +1,10 @@
+{# powiadomienie o wystapieniu logina w poscie na forum #}
+{% extends 'emails.notifications.base' %}
+
+{% block content %}
+    {{ sender }} użył Twojego loginu w treści posta w wątku <b>{{ subject|raw }}</b>:<br><br>
+
+    <hr>
+    {{ text|raw }}
+    <hr>
+{% endblock %}

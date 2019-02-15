@@ -26,7 +26,9 @@ class Misc extends Twig_Extension
             new Twig_SimpleFunction('timer', [$this, 'totalRuntime']),
             new Twig_SimpleFunction('github', [$this, 'githubAccountName']),
             new Twig_SimpleFunction('declination', [Declination::class, 'format']),
-            new Twig_SimpleFunction('sortable', [$this, 'sortable'], ['is_safe' => ['html']])
+            new Twig_SimpleFunction('sortable', [$this, 'sortable'], ['is_safe' => ['html']]),
+            new Twig_SimpleFunction('is_url', [$this, 'isUrl'], ['is_safe' => ['html']]),
+            new Twig_SimpleFunction('current_url', [$this, 'currentUrl'])
         ];
     }
 
@@ -109,5 +111,22 @@ class Misc extends Twig_Extension
             $title,
             ['class' => "sort " . ($sort == $column ? strtolower($order) : '')]
         );
+    }
+
+    /**
+     * @param string $url
+     * @return bool
+     */
+    public function isUrl($url)
+    {
+        return filter_var($url, FILTER_VALIDATE_URL);
+    }
+
+    /**
+     * @return string
+     */
+    public function currentUrl(): string
+    {
+        return request()->fullUrl();
     }
 }

@@ -2,22 +2,26 @@
 
 namespace Coyote\Http\Controllers\Forum;
 
+use Coyote\Notifications\Topic\MovedNotification;
 use Coyote\Services\Stream\Objects\Topic as Stream_Topic;
 use Coyote\Services\Stream\Activities\Move as Stream_Move;
 use Coyote\Services\Stream\Objects\Forum as Stream_Forum;
 use Coyote\Events\TopicWasMoved;
 use Coyote\Forum\Reason;
 use Coyote\Services\UrlBuilder\UrlBuilder;
+use Coyote\Topic;
 use Illuminate\Http\Request;
 
 class MoveController extends BaseController
 {
     /**
-     * @param \Coyote\Topic $topic
+     * @param Topic $topic
      * @param Request $request
      * @return \Illuminate\Http\RedirectResponse
+     * @throws \Illuminate\Auth\Access\AuthorizationException
+     * @throws \Illuminate\Validation\ValidationException
      */
-    public function index($topic, Request $request)
+    public function index(Topic $topic, Request $request)
     {
         $rules = ['slug' => 'required|exists:forums'];
 
@@ -32,36 +36,25 @@ class MoveController extends BaseController
         $this->authorize('move', $old);
         $forum = $this->forum->findBy('slug', $request->get('slug'));
 
-        if (!$forum->userCanAccess($this->userId)) {
-            abort(401);
-        }
+        $this->authorize('access', $forum);
+
+        abort_if($old->id === $forum->id, 404);
 
         $this->transaction(function () use ($topic, $forum, $request) {
-            $reason = null;
-
-            $notification = [
-                'sender_id'   => $this->userId,
-                'sender_name' => $this->auth->name,
-                'subject'     => str_limit($topic->subject, 84),
-                'forum'       => $forum->name,
-                'topic_id'    => $topic->id
-            ];
+            $reason = new Reason();
 
             if ($request->get('reason')) {
                 $reason = Reason::find($request->get('reason'));
-
-                $notification = array_merge($notification, [
-                    'excerpt'       => $reason->name,
-                    'reasonName'    => $reason->name,
-                    'reasonText'    => $reason->description
-                ]);
             }
 
-            // first, create object. we will save it in mongodb.
+            // first, create object. we will save it in db.
             $object = (new Stream_Topic())->map($topic);
 
             // then, set a new forum id
             $topic->forum_id = $forum->id;
+            $topic->mover_id = $this->userId;
+            $topic->moved_at = $topic->freshTimestamp();
+
             // magic happens here. database trigger will do the work
             $topic->save();
 
@@ -69,15 +62,15 @@ class MoveController extends BaseController
                 $object->reasonName = $reason->name;
             }
 
+            /** @var \Coyote\Post $post */
             $post = $this->post->find($topic->first_post_id, ['user_id']);
-            $recipientsId = $forum->onlyUsersWithAccess([$post->user_id]);
 
-            if ($recipientsId) {
-                app('alert.topic.move')
-                    ->with($notification)
-                    ->setUrl(UrlBuilder::topic($topic))
-                    ->setUsersId($recipientsId)
-                    ->notify();
+            if ($post->user_id !== null) {
+                $post->user->notify(
+                    (new MovedNotification($this->auth, $topic))
+                        ->setReasonText($reason->description)
+                        ->setReasonName($reason->name)
+                );
             }
 
             // we need to reindex this topic

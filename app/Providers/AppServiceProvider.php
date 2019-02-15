@@ -7,10 +7,13 @@ use Coyote\Services\FormBuilder\FormBuilder;
 use Coyote\Services\FormBuilder\FormInterface;
 use Coyote\Services\FormBuilder\ValidatesWhenSubmitted;
 use Coyote\Services\Invoice;
+use Coyote\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Routing\Events\RouteMatched;
 use Illuminate\Routing\Redirector;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\Paginator;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,7 +25,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot()
     {
         // set cloud flare as trusted proxy
-        $this->app['request']->setTrustedProxies($this->app['config']->get('cloudflare.ip'));
+        $this->app['request']->setTrustedProxies($this->app['config']->get('cloudflare.ip'), Request::HEADER_X_FORWARDED_ALL);
         // force HTTPS according to cloudflare HTTP_X_FORWARDED_PROTO header
         $this->app['request']->server->set(
             'HTTPS',
@@ -36,6 +39,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app['validator']->extend('reputation', 'Coyote\Http\Validators\ReputationValidator@validateReputation');
         $this->app['validator']->extend('spam_link', 'Coyote\Http\Validators\SpamValidator@validateSpamLink');
         $this->app['validator']->extend('spam_chinese', 'Coyote\Http\Validators\SpamValidator@validateSpamChinese');
+        $this->app['validator']->extend('spam_foreign', 'Coyote\Http\Validators\SpamValidator@validateSpamForeignLink');
+        $this->app['validator']->extend('spam_blacklist', 'Coyote\Http\Validators\SpamValidator@validateBlacklistHost');
         $this->app['validator']->extend('tag', 'Coyote\Http\Validators\TagValidator@validateTag');
         $this->app['validator']->extend('tag_creation', 'Coyote\Http\Validators\TagValidator@validateTagCreation');
         $this->app['validator']->extend('throttle', 'Coyote\Http\Validators\ThrottleValidator@validateThrottle');
@@ -47,6 +52,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app['validator']->extend('cc_number', 'Coyote\Http\Validators\CreditCardValidator@validateNumber');
         $this->app['validator']->extend('cc_cvc', 'Coyote\Http\Validators\CreditCardValidator@validateCvc');
         $this->app['validator']->extend('cc_date', 'Coyote\Http\Validators\CreditCardValidator@validateDate');
+        $this->app['validator']->extend('host', 'Coyote\Http\Validators\HostValidator@validateHost');
 
         $this->app['validator']->replacer('reputation', function ($message, $attribute, $rule, $parameters) {
             return str_replace(':point', $parameters[0], $message);
@@ -56,16 +62,20 @@ class AppServiceProvider extends ServiceProvider
             return str_replace(':point', $parameters[0], $message);
         });
 
+        $this->app['validator']->replacer('spam_foreign', function ($message, $attribute, $rule, $parameters) {
+            return str_replace(':posts', $parameters[0], $message);
+        });
+
         $this->app['validator']->replacer('tag_creation', function ($message, $attribute, $rule, $parameters) {
             return str_replace(':point', $parameters[0], $message);
         });
 
-        if (strpos(php_sapi_name(), 'cli') === false) {
-            // show mongodb queries in laravel debugbar
-            $this->app['db']->connection('mongodb')->enableQueryLog();
-        }
+        $this->app['validator']->replacer('host', function ($message, $attribute, $rule, $parameters) {
+            return str_replace(':host', implode(', ', $parameters), $message);
+        });
 
         $this->registerMacros();
+        Paginator::useBootstrapThree();
     }
 
     /**
@@ -88,7 +98,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         $this->app['events']->listen(RouteMatched::class, function () {
-            $this->app->resolving(function (FormInterface $form, $app) {
+            $this->app->resolving(FormInterface::class, function (FormInterface $form, $app) {
                 $form->setContainer($app)
                     ->setRedirector($app->make(Redirector::class))
                     ->setRequest($app->make('request'));
@@ -113,6 +123,58 @@ class AppServiceProvider extends ServiceProvider
 
         Collection::macro('replace', function ($items) {
             $this->items = $items;
+        });
+
+        Collection::macro('exceptUser', function (User $auth = null) {
+            if ($auth === null) {
+                return $this;
+            }
+
+            return $this->filter(function (User $user) use ($auth) {
+                return $user->id !== $auth->id;
+            });
+        });
+
+        Collection::macro('exceptUsers', function ($others = []) {
+            if (!($others instanceof Collection)) {
+                $others = collect($others);
+            }
+
+            if (!count($others)) {
+                return $this;
+            }
+
+            return $this->filter(function (User $user) use ($others) {
+                return ! $others->contains('id', $user->id);
+            });
+        });
+
+        Collection::macro('groupCategory', function () {
+            /** @var \Illuminate\Support\Collection $this */
+            $collection = $this
+                ->sortBy('category.id')
+                ->groupBy(function ($item) {
+                    return $item->category ? $item->category->name : 'Inne';
+                });
+
+            if (isset($collection['Inne'])) {
+                // move category at the end
+                $collection->put('Inne', $collection->splice(0, 1)['Inne']);
+            }
+
+            return $collection;
+        });
+
+        Request::macro('getClientHost', function () {
+            if (app()->environment() !== 'production') {
+                return '';
+            }
+
+            if (empty($this->clientHost)) {
+                $this->clientHost = gethostbyaddr($this->ip());
+            }
+
+            return $this->clientHost;
         });
     }
 }

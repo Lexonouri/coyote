@@ -3,7 +3,6 @@
 namespace Coyote;
 
 use Coyote\Notifications\ResetPasswordNotification;
-use Coyote\Services\Alert\DatabaseChannel;
 use Coyote\Services\Media\Photo;
 use Coyote\Services\Media\Factory as MediaFactory;
 use Illuminate\Auth\Authenticatable;
@@ -13,20 +12,20 @@ use Illuminate\Foundation\Auth\Access\Authorizable;
 use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
 use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
 use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
-use Illuminate\Notifications\Notifiable;
+use Illuminate\Notifications\RoutesNotifications;
 use Ramsey\Uuid\Uuid;
 
 /**
  * @property int $id
  * @property string $guest_id
- * @property int $is_active
- * @property int $is_confirm
- * @property int $is_blocked
+ * @property bool $is_active
+ * @property bool $is_confirm
+ * @property bool $is_blocked
  * @property int $group_id
  * @property int $visits
- * @property int $alerts
+ * @property int $notifications
  * @property int $pm
- * @property int $alerts_unread
+ * @property int $notifications_unread
  * @property int $pm_unread
  * @property int $posts
  * @property int $allow_count
@@ -35,6 +34,7 @@ use Ramsey\Uuid\Uuid;
  * @property int $allow_sig
  * @property int $allow_sticky_header
  * @property int $birthyear
+ * @property int $reputation
  * @property string $name
  * @property string $email
  * @property string $password
@@ -56,10 +56,11 @@ use Ramsey\Uuid\Uuid;
  * @property string $access_ip
  * @property \Coyote\Services\Media\MediaInterface $photo
  * @property bool $is_online
+ * @property bool $alert_login
  */
 class User extends Model implements AuthenticatableContract, AuthorizableContract, CanResetPasswordContract
 {
-    use Authenticatable, Authorizable, CanResetPassword, Notifiable;
+    use Authenticatable, Authorizable, CanResetPassword, RoutesNotifications;
 
     /**
      * The database table used by the model.
@@ -223,28 +224,36 @@ class User extends Model implements AuthenticatableContract, AuthorizableContrac
     }
 
     /**
-     * @param int $typeId
-     * @return array
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
-    public function notificationChannels($typeId)
+    public function invoices()
     {
-        $channels = [];
-        $settings = $this->hasOne('Coyote\Alert\Setting')->where('type_id', $typeId)->first();
-
-        if ($settings->profile) {
-            $channels[] = DatabaseChannel::class;
-        }
-
-        if ($this->email && $this->is_active && $this->is_confirm && !$this->is_blocked && $settings->email) {
-            $channels[] = 'mail';
-        }
-
-        return $channels;
+        return $this->hasMany('Coyote\Invoice');
     }
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    /**
+     * @param string $objectId
+     * @return Model|null|static
+     */
     public function getUnreadNotification($objectId)
     {
-        return $this->hasOne('Coyote\Alert')->where('object_id', '=', $objectId)->whereNull('read_at')->first();
+        return $this->hasOne(Notification::class)->where('object_id', '=', $objectId)->whereNull('read_at')->first();
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function notificationSettings()
+    {
+        return $this->hasMany(Notification\Setting::class);
     }
 
     /**
@@ -262,11 +271,11 @@ class User extends Model implements AuthenticatableContract, AuthorizableContrac
     }
 
     /**
-     * @return int[]
+     * @return bool
      */
-    public function getGroupsId()
+    public function canReceiveEmail(): bool
     {
-        return $this->groups()->pluck('id')->toArray();
+        return $this->email && $this->is_active && $this->is_confirm && !$this->is_blocked;
     }
 
     /**
@@ -319,5 +328,15 @@ class User extends Model implements AuthenticatableContract, AuthorizableContrac
     public function sendPasswordResetNotification($token)
     {
         $this->notify(new ResetPasswordNotification($token));
+    }
+
+    /**
+     * The channels the user receives notification broadcasts on.
+     *
+     * @return string
+     */
+    public function receivesBroadcastNotificationsOn()
+    {
+        return 'user:' . $this->id;
     }
 }

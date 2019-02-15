@@ -68,6 +68,7 @@ class UserValidator
      */
     protected function validateBy($column, $value, $userId = null)
     {
+        // @see https://github.com/adam-boduch/coyote/issues/354
         $user = $this->user->{'findBy' . ucfirst($column)}(mb_strtolower($value));
 
         if ($user !== null && $userId !== $user->id) {

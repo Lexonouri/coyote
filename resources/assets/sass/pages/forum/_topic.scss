@@ -228,12 +228,11 @@
   }
 
   .btn-multi-quote {
-    border-left: 1px solid $border-color;
-    margin-right: 5px;
+    border-right: 1px solid $border-color;
   }
 
   .btn-multi-quote.active {
-    border-left: 1px solid #555;
+    border-right: 1px solid #555;
   }
 
   .dropdown-toggle {
@@ -257,6 +256,13 @@
 
   @include link-color-darker;
   @include stripped-table;
+
+  // styles for better column width adjustment
+  // @see https://github.com/adam-boduch/coyote/issues/347
+  > table > tbody > tr > td,
+  > table > tbody > tr > th {
+    word-break: break-word;
+  }
 
   hr {
     margin: 15px 0 5px 0;
@@ -374,7 +380,7 @@ div.tooltip-inner {
 .comments {
   margin: 15px 0 5px 25px;
   font-family: Tahoma,sans-serif;
-  font-size: 11px;
+  font-size: $font-size-small - 1px;
   padding-right: 50px;
 
   @include link-color-darker;
@@ -402,16 +408,26 @@ div.tooltip-inner {
       position: absolute;
     }
 
+    // Topic's author
+    // -----------------
+
+    .badge-creator {
+      font-size: $font-size-small - 1px;
+      font-weight: normal;
+      padding: 1px 5px;
+      margin-top: -1px;
+
+      > a:hover {
+        text-decoration: none;
+      }
+    }
+
     .timestamp {
       color: $gray-light;
 
       &:hover {
         color: $alt-link-hover-color;
       }
-    }
-
-    .author {
-      background-color: $gray-lighter;
     }
 
     &:hover {

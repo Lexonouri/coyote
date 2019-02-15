@@ -4,14 +4,16 @@ namespace Coyote\Exceptions;
 
 use Coyote\Repositories\Contracts\PageRepositoryInterface;
 use Exception;
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
-use Illuminate\Http\Exception\HttpResponseException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Symfony\Component\Console\Exception\CommandNotFoundException;
+use Symfony\Component\Debug\Exception\FlattenException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
@@ -23,13 +25,19 @@ class Handler extends ExceptionHandler
      * @var array
      */
     protected $dontReport = [
-        AuthorizationException::class,
-        HttpException::class,
-        ModelNotFoundException::class,
-        ValidationException::class,
         ForbiddenException::class,
-        TokenMismatchException::class,
-        CommandNotFoundException::class
+        CommandNotFoundException::class,
+        PaymentFailedException::class
+    ];
+
+    /**
+     * A list of the inputs that are never flashed for validation exceptions.
+     *
+     * @var array
+     */
+    protected $dontFlash = [
+        'password',
+        'password_confirmation',
     ];
 
     /**
@@ -74,17 +82,11 @@ class Handler extends ExceptionHandler
 
             if ($e instanceof HttpResponseException) {
                 return parent::render($request, $e);
-            }
-
-            if ($e instanceof ValidationException && $e->getResponse()) {
+            } elseif ($e instanceof ValidationException) {
+//            if ($e instanceof ValidationException && $e->getResponse()) {
                 return response()->json($e->validator->errors(), $statusCode);
-            }
-
-            if ($e instanceof TokenMismatchException) {
-                return response()->json(
-                    ['error' => 'Twoja sesja wygasła. Proszę odświeżyć stronę i spróbować ponownie.'],
-                    $statusCode
-                );
+            } elseif ($e instanceof TokenMismatchException) {
+                return $this->renderTokenMismatchException($request, $e);
             }
 
             $response = [
@@ -102,19 +104,32 @@ class Handler extends ExceptionHandler
 
         if ($e instanceof ForbiddenException) {
             return $this->renderForbiddenException($e);
-        }
-
-        if ($e instanceof TokenMismatchException) {
-            return redirect($request->fullUrl())
-                ->withInput($request->except('_token'))
-                ->with('error', 'Wygląda na to, że nie wysłałeś tego formularza przez dłuższy czas. Spróbuj ponownie!');
-        }
-
-        if (($e instanceof HttpException && $e->getStatusCode() === 404) || $e instanceof ModelNotFoundException) {
+        } elseif ($e instanceof TokenMismatchException) {
+            return $this->renderTokenMismatchException($request, $e);
+        } elseif (($e instanceof HttpException && $e->getStatusCode() === 404) || $e instanceof ModelNotFoundException) {
             return $this->renderHttpErrorException($request, $e);
         }
 
         return parent::render($request, $e);
+    }
+
+    /**
+     * @param Request $request
+     * @param $e
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\Http\RedirectResponse
+     */
+    protected function renderTokenMismatchException(Request $request, $e)
+    {
+        if ($request->isXmlHttpRequest()) {
+            return response()->json(
+                ['error' => 'Twoja sesja wygasła. Proszę odświeżyć stronę i spróbować ponownie.'],
+                $this->isHttpException($e) ? $e->getStatusCode() : 500
+            );
+        }
+
+        return redirect($request->fullUrl())
+            ->withInput($request->except('_token'))
+            ->with('error', 'Wygląda na to, że nie wysłałeś tego formularza przez dłuższy czas. Spróbuj ponownie!');
     }
 
     /**
@@ -133,20 +148,37 @@ class Handler extends ExceptionHandler
      */
     protected function renderHttpErrorException(Request $request, $e)
     {
-        $path = rawurldecode(rtrim($request->getPathInfo(), '/'));
-        $page = $this->container[PageRepositoryInterface::class]->findByPath($path);
+        // Case insensitive path lookup.
+        // Redirect to correct version if exists
+        $path = $this->findCamelCasePath($request);
 
-        if (!$page) {
+        if ($path === null) {
             return parent::render($request, $e);
         }
 
-        return redirect($page->path, 301);
+        return redirect($path, 301);
+    }
+
+    /**
+     * Case insensitive path lookup.
+     *
+     * @param Request $request
+     * @return null|string
+     */
+    protected function findCamelCasePath(Request $request): ?string
+    {
+        // try to find correct path for given page
+        $path = rawurldecode(rtrim($request->getPathInfo(), '/'));
+        $page = $this->container[PageRepositoryInterface::class]->findByPath($path);
+
+        return $page !== null && $page->path !== $path ? $page->path : null;
     }
 
     /**
      * Get the html response content.
      *
      * @param  \Exception  $e
+     * @throws \FlattenException
      * @return \Symfony\Component\HttpFoundation\Response
      */
     protected function convertExceptionToResponse(Exception $e)
@@ -155,17 +187,20 @@ class Handler extends ExceptionHandler
             return parent::convertExceptionToResponse($e);
         }
 
+        $e = FlattenException::create($e);
+
         // on production site, we MUST render "nice" error page
-        return SymfonyResponse::create(view('errors.500')->render(), 500);
+        return SymfonyResponse::create(view('errors.500')->render(), $e->getStatusCode(), $e->getHeaders());
     }
 
     /**
-     * Convert an authentication exception into an unauthenticated response.
+     * Convert an authentication exception into a response.
      *
      * @param  \Illuminate\Http\Request  $request
+     * @param  \Illuminate\Auth\AuthenticationException  $exception
      * @return \Illuminate\Http\Response
      */
-    protected function unauthenticated($request)
+    protected function unauthenticated($request, AuthenticationException $exception)
     {
         if ($request->expectsJson()) {
             return response()->json(['error' => 'Unauthenticated.'], 401);

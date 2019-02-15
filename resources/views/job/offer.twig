@@ -1,20 +1,15 @@
 {% extends 'job.base' %}
-{% block title %}
-    {% spaceless %}
-        {{ job.title }}
 
-        {% if job.firm_id and not job.firm.is_agency %}
-            @ {{ job.firm.name }}
-        {% endif %}
+{% import 'components.widgets' as widgets %}
 
-        :: praca dla programistów
+{% set page_title = job.title ~ ' ' ~ (job.firm.id and not job.firm.is_agency ? '@ ' ~ job.firm.name) %}
 
-        {{ parent() }}
-    {% endspaceless %}
-{% endblock %}
+{% block title %}{{ page_title }} :: praca dla programistów {{ parent() }}{% endblock %}
 
+{% block ogtitle %}{{ page_title }}{% endblock %}
 {% block description %}{{ excerpt(job.description) }}{% endblock %}
 {% block keywords %}{{ keywords(job.description)|join(',') }}{% endblock %}
+{% block logo %}{{ job.firm.logo ? logo(job.firm.logo, true) : secure_asset('img/apple-touch.png') }}{% endblock %}
 
 {% block container %}
     <div class="row margin-md-top">
@@ -37,11 +32,11 @@
 
     <div class="row">
         <div class="col-md-9">
-            {% if payment %}
+            {% if payment and not session_has('success') %}
                 <div class="alert alert-warning">
                     <h4><i class="fa fa-credit-card fa-fw"></i> Oczekiwanie na płatność...</h4>
 
-                    <p>Ogłoszenie jest już wyświetlane i widoczne dla wszystkich. Nie możemy jednak rozpocząć promowania oferty, dopóki nie uregulujesz płatności w kwocie <strong>{{ payment.grossPrice() }} zł</strong>.</p>
+                    <p>Ogłoszenie jest już w naszej bazie. Nie możemy jednak rozpocząć wyświetlania oferty, dopóki nie uregulujesz płatności.</p>
 
                     <a href="{{ route('job.payment', [payment.id]) }}" class="btn btn-sm alert-warning margin-sm-top">Przejdź do płatności</a>
                 </div>
@@ -50,47 +45,44 @@
             <div class="panel panel-default">
                 {% include 'job.partials.offer' %}
             </div>
+
+            {% include 'job.partials.comments' %}
         </div>
 
         <aside class="col-md-3">
             {% include 'job.partials.sidemenu' %}
 
-            {% if job.firm_id and (job.firm.street or job.firm.website or job.firm.employees or job.firm.founded or job.firm.latitude) %}
+            {% if can('job-update') %}
                 <section id="box-job-firm" class="box">
-                    <h4><i class="fa fa-info-circle fa-fw"></i> O firmie</h4>
+                    <h4><i class="fa fa-info-circle fa-fw"></i> Informacje o ofercie</h4>
 
                     <div class="panel panel-default">
                         <div class="panel-body">
                             <ul class="list-unstyled">
-                                {% if job.firm.street %}
-                                    <li>
-                                        <i class="fa fa-home fa-fw"></i>
-                                        {{ job.firm.street }} {{ job.firm.house }} {{ job.firm.postcode }} {{ job.firm.city }}
+                                <li title="Data opublikowania">
+                                    <i class="fa fa-calendar"></i>
+                                    {{ job.boost_at|format_date }}
+                                </li>
+
+                                <li class="counter" title="Liczba odsłon">
+                                    <i class="fa fa-eye"></i>
+                                    {{ declination(job.views, ['odsłona', 'odsłony', 'odsłon']) }}
+                                </li>
+
+                                {% if job.enable_apply %}
+                                    <li class="applications" title="Liczba osób, które aplikowały na tę ofertę. Informacja widoczna jedynie dla Ciebie.">
+                                        <i class="fa fa-files-o"></i>
+                                        {{ declination(job.applications.count(), ['aplikacja', 'aplikacje', 'aplikacji']) }}
                                     </li>
                                 {% endif %}
-                                {% if job.firm.website %}
-                                    <li>
-                                        <i class="fa fa-link fa-fw"></i>
-                                        <a href="{{ job.firm.website }}">{{ job.firm.website }}</a>
-                                    </li>
-                                {% endif %}
-                                {% if job.firm.employees %}
-                                    <li>
-                                        <i class="fa fa-users fa-fw"></i>
-                                        {{ employees_list[job.firm.employees] }} pracowników
-                                    </li>
-                                {% endif %}
-                                {% if job.firm.founded %}
-                                    <li>
-                                        <i class="fa fa-calendar-o fa-fw"></i>
-                                        Rok założenia: {{ job.firm.founded }}
+
+                                {% if not job.is_expired %}
+                                    <li title="Oferta traci ważność z dniem {{ job.deadline_at|format_date(false) }}">
+                                        <i class="fa fa-clock-o"></i>
+                                        {{ job.deadline }} dni do końca
                                     </li>
                                 {% endif %}
                             </ul>
-
-                            {% if job.firm.longitude and job.firm.latitude %}
-                                <div id="map" style="height: 300px"></div>
-                            {% endif %}
                         </div>
                     </div>
                 </section>
@@ -113,6 +105,15 @@
 {% endblock %}
 
 {% block body %}
+    {{ widgets.vue() }}
+
+    <script>
+        var data = {
+            authId: {{ user('id') ?: 'null' }},
+            comments: {{ comments|json_encode|raw }}
+        };
+    </script>
+
     {{ parent() }}
 
     {% if user('id') == job.user_id %}
@@ -150,4 +151,6 @@
             $('.metadata li').tooltip({'container':'body'});
         });
     </script>
+
 {% endblock %}
+

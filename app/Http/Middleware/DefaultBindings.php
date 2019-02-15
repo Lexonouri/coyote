@@ -4,6 +4,7 @@ namespace Coyote\Http\Middleware;
 
 use Closure;
 use Coyote\Repositories\Contracts\JobRepositoryInterface;
+use Coyote\Repositories\Contracts\TagRepositoryInterface;
 use Illuminate\Container\Container as App;
 use Coyote\Repositories\Contracts\BlockRepositoryInterface;
 use Coyote\Repositories\Contracts\FirewallRepositoryInterface;
@@ -27,7 +28,8 @@ class DefaultBindings
         'firewall' => FirewallRepositoryInterface::class,
         'group' => GroupRepositoryInterface::class,
         'block' => BlockRepositoryInterface::class,
-        'job' => JobRepositoryInterface::class
+        'job' => JobRepositoryInterface::class,
+        'tag' => TagRepositoryInterface::class
     ];
 
     /**
@@ -55,10 +57,10 @@ class DefaultBindings
     public function handle(Request $request, Closure $next)
     {
         $route = $request->route();
-        $optional = $this->getOptionalParameters($route->getUri());
+        $optional = $this->getOptionalParameters($route->uri());
 
         foreach ($optional as $parameter) {
-            if (isset($this->default[$parameter]) && null === $route->getParameter($parameter)) {
+            if (isset($this->default[$parameter]) && null === $route->parameter($parameter)) {
                 $model = $this->app->make($this->default[$parameter])->makeModel();
                 $route->setParameter($parameter, $model);
             }

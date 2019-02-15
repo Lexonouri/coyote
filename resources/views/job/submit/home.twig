@@ -1,4 +1,6 @@
 {% extends 'job.base' %}
+
+{% import 'components.widgets' as widgets %}
 {% block title %}Wystaw ofertę pracy{{ parent() }}{% endblock %}
 
 {% import 'components.modals' as modals %}
@@ -18,6 +20,12 @@
             {% include 'job.submit.partials.loader' %}
 
             {{ form_start(form) }}
+                {% if not is_plan_ongoing %}
+                    {{ form_widget(form.plan_id) }}
+
+                    <vue-pricing :plans="plans" :v-model.sync="job.plan_id" email="{{ config('mail.from.address') }}"></vue-pricing>
+                {% endif %}
+
                 {{ form_widget(form.id) }}
                 {{ form_widget(form.firm_id) }}
                 {{ form_widget(form.slug) }}
@@ -81,13 +89,14 @@
                             </div>
                         </div>
 
-                        <div class="form-group has-feedback">
+                        <div class="form-group" :class="{'has-error': errors.tags != null}">
                             <label class="control-label">Kluczowe technologie (wymagane lub mile widziane)</label>
 
-                            {{ form_text('tag', '', {'id': 'tag', 'class': 'form-control', 'placeholder': 'Np. Java, MS-SQL', 'autocomplete': 'off', 'data-post-url': route('job.submit.tag'), 'data-suggestions-url': route('job.tag.suggestions')}) }}
+                            <vue-tags-dropdown id="tag" :tags="popular_tags" @change="onTagChange"></vue-tags-dropdown>
 
-                            <span class="help-block" v-if="suggestions.length == 0">Wybierz z listy lub wpisz nazwę języka/technologii i naciśnij Enter, aby dodać wymaganie.</span>
-                            <span class="help-block" v-if="suggestions.length > 0">
+                            <span class="help-block" v-if="errors.tags != null">${ errors.tags[0] }</span>
+                            <span class="help-block" v-else-if="suggestions.length === 0">Wybierz z listy lub wpisz nazwę języka/technologii i naciśnij Enter, aby dodać wymaganie.</span>
+                            <span class="help-block" v-else-if="suggestions.length > 0">
                                 Podpowiedź:
 
                                 <template v-for="(suggestion, index) in suggestions">
@@ -95,102 +104,19 @@
                                 </template>
                             </span>
 
-                            <span class="fa fa-tag form-control-feedback" aria-hidden="true"></span>
-
-                            <ol class="tag-dropdown">
-                                {% include 'components.tags' with {'tags': popular_tags} only %}
-                            </ol>
-
                             <div id="tags-container" class="margin-md-top">
-                                <div v-for="(tag, index) in tags" class="row tag-item margin-sm-bottom">
-                                    <div class="col-xs-5">
-                                        <ol class="tag-clouds">
-                                            <li><a href="javascript:" title="Chwyć, aby przenieść na dół lub na górę">${ tag.name }</a></li>
-                                        </ol>
-                                    </div>
+                                <ul class="tag-clouds tag-clouds-skills">
+                                    <template v-for="(tag, index) in tags">
+                                        <vue-tag-skill :tag.sync="tag" :tooltips="['mile widziane', 'średnio zaawansowany', 'zaawansowany']" @delete="onTagDelete"></vue-tag-skill>
 
-                                    <input type="hidden" :name="'tags[' + index + '][name]'" :value="tag.name" class="tag-name">
-
-                                    <div class="col-xs-6">
-                                        <div class="radio radio-primary radio-inline">
-                                            <input type="radio" :name="'tags[' + index + '][priority]'" v-model="tag.pivot.priority" value="1" :id="tag.name + '-must-have'">
-
-                                            <label :for="tag.name + '-must-have'"> Wymagane </label>
-                                        </div>
-                                        <div class="radio radio-inline">
-                                            <input type="radio" :name="'tags[' + index + '][priority]'" v-model="tag.pivot.priority" value="0" :id="tag.name + '-nice-to-have'">
-
-                                            <label :for="tag.name + '-nice-to-have'"> Mile widziane </label>
-                                        </div>
-                                    </div>
-
-                                    <div class="col-xs-1">
-                                        <a class="btn-xs btn-remove pull-right" href="javascript:" title="Kliknij, aby usunąć tag" @click="removeTag(index)">
-                                            <i class="fa fa-remove text-danger"></i>
-                                        </a>
-                                    </div>
-                                </div>
-
+                                        <input type="hidden" :name="'tags[' + index + '][name]'" :value="tag.name">
+                                        <input type="hidden" :name="'tags[' + index + '][priority]'" v-model="tag.pivot.priority">
+                                    </template>
+                                </ul>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                {% if not is_plan_ongoing %}
-                    <div class="panel panel-default plans">
-                        <div class="panel-heading">
-                            Promowanie ogłoszenia
-                        </div>
-
-                        {{ form_widget(form.plan_length) }}
-
-                        <div class="panel-body">
-                            <h3 class="margin-md-bottom">Co zyskujesz?</h3>
-
-                            <ul class="list-unstyled margin-md-top margin-md-bottom">
-                                <li><i class="fa fa-check-circle fa-fw text-primary"></i> Wyższa pozycja na <strong>liście wyszukiwania</strong>. Twoja oferta będzie wyświetlana nad darmowymi.</li>
-                                <li>
-                                    <i class="fa fa-check-circle fa-fw text-primary"></i>
-                                    <strong>Reklama</strong> oferty na forum i stronie głównej.
-
-                                    <a href="javascript:" class="plan-tooltip-wrapper">
-                                        Zobacz jak to wygląda.
-
-                                        <div class="plan-tooltip"><img src="{{ cdn('img/offer-example.jpg') }}"></div>
-                                    </a>
-                                </li>
-                                <li><i class="fa fa-check-circle fa-fw text-primary"></i> <span class="label label-new">Nowość</span> Wyróżnienie <strong>kolorem</strong>. <i class="fa fa-question-circle" style="font-size: 16px; cursor: help;" data-toggle="tooltip" title="Twoje ogłoszenie otrzyma dodatkowe tło, które odróżni je od standardowych ogłoszeń na liście."></i></li>
-                                <li><i class="fa fa-check-circle fa-fw text-primary"></i> <span class="label label-new">Nowość</span> <strong>3x podbicie</strong> ogłoszenia. <i class="fa fa-question-circle" style="font-size: 16px; cursor: help;" data-toggle="tooltip" title="W okresie promowania oferty, 3 razy podbijemy Twoje ogłoszenie na górę listy. Dzięki temu więcej ludzi będzie mogło je zobaczyć."></i></li>
-                                <li><i class="fa fa-check-circle fa-fw text-primary"></i> Tylko <strong>${ price } zł</strong> (~2 €) netto za dzień. Sam decydujesz ile dni oferta ma być promowana.</li>
-                            </ul>
-
-                            <div class="well well-sm">
-                                <div class="checkbox">
-                                    <div class="row">
-                                        <div class="col-sm-7">
-                                            {{ form_widget(form.plan_id) }}
-
-                                            <label for="{{ form.plan_id.attr.id }}">
-                                                {{ form.plan_id.label }}
-                                            </label>
-                                        </div>
-
-                                        <div class="col-sm-5 text-right" v-show="job.plan_id">
-                                            <span class="pricing"><strong>${ price } zł</strong> netto</span>
-                                            <sup class="padding-md-left padding-md-right">x</sup>
-
-                                            <changer :value="job.plan_length" class="pricing" :choices="[3, 5, 7, 14, 30, 40, 50, 60, 70, 80, 90]" @change="changePlan"></changer>
-
-                                            <sup class="padding-md-left padding-md-right">=</sup>
-
-                                            <strong class="total-price">${ price * job.plan_length } zł</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                {% endif %}
 
                 <div class="panel panel-default">
                     <div class="panel-heading">
@@ -198,13 +124,6 @@
                     </div>
 
                     <div class="panel-body">
-                        <div class="form-group form-group-border" :class="{'has-error': isInvalid(['deadline'])}">
-                            {{ form_label(form.deadline) }}
-
-                            {{ form_widget(form.deadline) }} dni
-                            {{ form_error(form.deadline) }}
-                        </div>
-
                         {{ form_row(form.description) }}
 
                         <div class="form-group form-group-border">
@@ -226,7 +145,7 @@
                                         <input type="hidden" :name="'features[' + index + '][checked]'" :value="feature.pivot.checked">
 
                                         <div class="col-xs-5" v-show="feature.pivot.checked && feature.default">
-                                            <input type="text" class="form-control input-sm" :placeholder="feature.default" :name="'features[' + index + '][value]'" :value="feature.pivot.value" v-model="feature.pivot.value">
+                                            <input type="text" class="form-control input-sm" :placeholder="feature.default" :name="'features[' + index + '][value]'" v-model="feature.pivot.value">
                                         </div>
                                     </div>
                                 </li>
@@ -236,8 +155,17 @@
                         <div class="form-group" :class="{'has-error': isInvalid(['email'])}">
                             {{ form_row(form.enable_apply.child(0), {attr: {'v-model': 'job.enable_apply'}}) }}
 
-                            {{ form_widget(form.email, {attr: {':disabled': 'job.enable_apply == 0'}}) }}
-                            {{ form_error(form.email) }}
+                            <div class="row">
+                                <div class="col-sm-6">
+                                    {{ form_widget(form.email, {attr: {':disabled': 'job.enable_apply == 0'}}) }}
+                                    {{ form_error(form.email) }}
+                                </div>
+
+                                <div class="col-sm-6" :class="{'has-error': errors.phone != null}">
+                                    {{ form_widget(form.phone, {attr: {':disabled': 'job.enable_apply == 0'}}) }}
+                                    {{ form_error(form.phone) }}
+                                </div>
+                            </div>
                         </div>
 
                         <div class="form-group" :class="{'has-error': isInvalid(['recruitment'])}">
@@ -268,28 +196,40 @@
                     <h4>Ile kosztuje dodanie ogłoszenia?</h4>
 
                     <p>
-                        Dodanie ogłoszenia jest zupełnie <strong>darmowe</strong>. Polecamy jednak skorzystanie z opcji
-                        promowania w cenie <strong>9 zł netto</strong> (~2 €) za dzień.
+                        Masz możliwość wyboru jednego z trzech pakietów. Koszt najtańszego pakietu to niecałe <strong>1 zł</strong> za dzień.
                     </p>
 
-                    <h4 class="margin-md-top">Zalety promowanego ogłoszenia</h4>
+                    <h4 class="margin-md-top">Możliwe opcje promowania oferty pracy</h4>
 
                     <p><i class="fa fa-check fa-fw"></i> Ogłoszenie wyświetlane nad tymi darmowymi.</p>
                     <p><i class="fa fa-check fa-fw"></i> Reklama na stronie głównej oraz forum.</p>
                     <p><i class="fa fa-check fa-fw"></i> Podświetlenie oferty.</p>
                     <p><i class="fa fa-check fa-fw"></i> 3x podbicie oferty.</p>
-                    <p><i class="fa fa-check fa-fw"></i> Sam decydujesz ile dni oferta ma być promowana.</p>
 
                     <h4 class="margin-md-top">Formy płatności</h4>
 
                     <p>
-                        Za opcję promowania zapłacisz kartą Visa, Mastercard lub Maestro.
+                        Za opcję promowania zapłacisz kartą Visa, Mastercard lub Maestro jak i również <strong>szybkim</strong> przelewem bankowym.
+                        Operatorem płatności jest firma PayLane oraz serwis Przelewy24.pl.
                     </p>
 
                     <h4 class="margin-md-top">Faktura VAT</h4>
 
                     <p>
                         Fakturę VAT prześlemy Ci na e-mail. Dane do faktury podasz w ostatnim kroku.
+                    </p>
+
+                    <h4 class="margin-md-top">Kupno większej ilości pakietów</h4>
+
+                    <p>
+                        Istnieje możliwość płatności z góry za większą ilość pakietów. Jeżeli chcesz poznać więcej szczegółów,
+                        napisz do nas na adres <a href="mailto:{{ config('mail.from.address') }}" style="color: #960202; text-decoration: underline">{{ config('mail.from.address') }}</a>.
+                    </p>
+
+                    <h4 class="margin-md-top">Pomoc</h4>
+
+                    <p>
+                        Jeżeli masz problem z publikacją ogłoszenia lub płatnością, chętnie Ci pomożemy! Napisz do nas na <a href="mailto:{{ config('mail.from.address') }}" style="color: #960202; text-decoration: underline">{{ config('mail.from.address') }}</a>.
                     </p>
                 </div>
             </div>
@@ -306,23 +246,21 @@
     <script>
         var data = {
             job: {{ job|raw }},
-            price: 9,
             tags: {{ form.tags.value|raw }},
             features: {{ form.features.value|raw }},
             errors: {{ form_errors|raw }},
-            suggestions: []
+            plans: {{ plans|raw }},
+            popular_tags: {{ popular_tags|json_encode|raw }},
+            suggestions: [],
+            suggestionUrl: '{{ route('job.tag.suggestions') }}'
         };
     </script>
 
-    <script src="//cdnjs.cloudflare.com/ajax/libs/vue/2.1.10/vue.min.js"></script>
+    {{ widgets.vue() }}
     <script src="//cdn.tinymce.com/4/tinymce.min.js"></script>
-    <script src="{{ cdn('js/jquery-ui.js') }}"></script>
+    <script src="{{ asset('js/jquery-ui.js') }}"></script>
     <script src="{{ cdn('js/job-submit.js') }}"></script>
-    <script>
-        $(function() {
-            $('input[name="title"]').focus();
-        })
-    </script>
 
     {% include 'job.submit.partials.navigation' %}
+    {% include 'job.submit.partials.chat' %}
 {% endblock %}

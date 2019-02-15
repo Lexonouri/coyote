@@ -16,6 +16,9 @@ class Context extends Parser implements ParserInterface
             return $text;
         }
 
+        $text = $this->hashBlock($text, ['code', 'a']);
+        $text = $this->hashInline($text, 'img');
+
         preg_match_all('~' . self::HEADLINE_REGEXP . '~', $text, $matches);
         $headlines = '';
 
@@ -33,6 +36,7 @@ class Context extends Parser implements ParserInterface
         }
 
         $text = str_replace('{{CONTENT}}', $headlines, $text);
+        $text = $this->unhash($text);
 
         return $text;
     }
@@ -58,6 +62,7 @@ class Context extends Parser implements ParserInterface
         } elseif ($indent < $prev) {
             $sub[$indent + 1] = 0;
         }
+
         if (isset($sub[$indent])) {
             $sub[$indent]++;
         } else {

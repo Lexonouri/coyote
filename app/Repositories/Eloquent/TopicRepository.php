@@ -23,14 +23,9 @@ class TopicRepository extends Repository implements TopicRepositoryInterface, Su
     }
 
     /**
-     * @param $userId
-     * @param $sessionId
-     * @param string $order
-     * @param string $direction
-     * @param int $perPage
-     * @return LengthAwarePaginator
+     * @inheritdoc
      */
-    public function paginate($userId, $sessionId, $order = 'topics.last_post_id', $direction = 'DESC', $perPage = 20)
+    public function paginate($userId, string $guestId, $order = 'topics.last_post_id', $direction = 'DESC', $perPage = 20)
     {
         $this->applyCriteria();
 
@@ -78,18 +73,16 @@ class TopicRepository extends Repository implements TopicRepositoryInterface, Su
                 'poster.photo AS poster_photo',
                 'forums.slug AS forum_slug',
                 'forums.name AS forum_name',
-                'prev.name AS prev_forum_name',
                 'pa.post_id AS post_accept_id'
             ])
             ->from($this->raw("($from) AS topics"))
             ->join('forums', 'forums.id', '=', 'topics.forum_id')
-            ->leftJoin('forums AS prev', 'prev.id', '=', 'prev_forum_id')
             ->join('posts AS first', 'first.id', '=', 'topics.first_post_id')
             ->join('posts AS last', 'last.id', '=', 'topics.last_post_id')
             ->leftJoin('users AS author', 'author.id', '=', 'first.user_id')
             ->leftJoin('users AS poster', 'poster.id', '=', 'last.user_id')
-            ->trackForum($userId, $sessionId)
-            ->trackTopic($userId, $sessionId)
+            ->trackForum($guestId)
+            ->trackTopic($guestId)
             ->leftJoin('post_accepts AS pa', 'pa.topic_id', '=', 'topics.id')
             ->with(['tags', 'forum'])
             ->orderBy('topics.ordering')
@@ -111,15 +104,9 @@ class TopicRepository extends Repository implements TopicRepositoryInterface, Su
     }
 
     /**
-     * Is there any unread topic in this category?
-     *
-     * @param $forumId
-     * @param $markTime
-     * @param $userId
-     * @param $sessionId
-     * @return mixed
+     * @inheritdoc
      */
-    public function isUnread($forumId, $markTime, $userId, $sessionId)
+    public function isUnread($forumId, $markTime, $guestId)
     {
         $sql = $this->toSql(
             $this
@@ -134,7 +121,7 @@ class TopicRepository extends Repository implements TopicRepositoryInterface, Su
         return $this
             ->model
             ->from($this->raw("($sql) AS topics"))
-            ->trackTopic($userId, $sessionId)
+            ->trackTopic($guestId)
             ->withTrashed()
             ->whereNull('topic_track.id')
             ->count();

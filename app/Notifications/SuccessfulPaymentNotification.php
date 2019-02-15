@@ -3,6 +3,7 @@
 namespace Coyote\Notifications;
 
 use Coyote\Payment;
+use Coyote\Services\UrlBuilder\UrlBuilder;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
 
@@ -41,21 +42,33 @@ class SuccessfulPaymentNotification extends Notification
     /**
      * Get the mail representation of the notification.
      *
-     * @param  \Coyote\User  $user
      * @return \Illuminate\Notifications\Messages\MailMessage
      */
-    public function toMail($user)
+    public function toMail()
     {
         $mail = (new MailMessage)
-            ->to($user->email)
-            ->subject(sprintf('Potwierdzenie płatności za promowanie oferty: %s', $this->payment->job->title))
-            ->line(
+            ->subject($this->getSubject());
+
+        if ($this->payment->invoice_id && $this->payment->invoice->grossPrice() > 0) {
+            $mail->line(
                 sprintf(
                     'Otrzymaliśmy płatność w kwocie <strong>%s %s</strong>.',
                     $this->payment->invoice->grossPrice(),
                     $this->payment->invoice->currency->symbol
                 )
             );
+        }
+
+        if ($this->payment->coupon_id) {
+            // load coupons even if they are deleted
+            $this->payment->load([
+                'coupon' => function ($query) {
+                    return $query->withTrashed();
+                }
+            ]);
+
+            $mail->line(sprintf('Potwierdzamy realizację kodu rabatowego: <strong>%s</strong>', $this->payment->coupon->code));
+        }
 
         if ($this->pdf !== null) {
             $mail->line('W załączniku znajdziesz fakturę VAT.');
@@ -68,7 +81,7 @@ class SuccessfulPaymentNotification extends Notification
                     $this->payment->job->title
                 )
             )
-            ->action('Zobacz ogłoszenie', route('job.offer', [$this->payment->job->id, $this->payment->job->slug]))
+            ->action('Zobacz ogłoszenie', UrlBuilder::job($this->payment->job, true))
             ->line('Dziekujemy za skorzystanie z naszych usług.');
 
         if ($this->pdf !== null) {
@@ -84,5 +97,18 @@ class SuccessfulPaymentNotification extends Notification
     private function getFilename(): string
     {
         return str_replace('/', '_', $this->payment->invoice->number) . '.pdf';
+    }
+
+    /**
+     * @return string
+     */
+    private function getSubject(): string
+    {
+        return sprintf(
+            $this->pdf !== null
+                ? 'Faktura VAT: %s'
+                    : 'Potwierdzenie płatności za promowanie oferty: %s',
+            $this->payment->job->title
+        );
     }
 }

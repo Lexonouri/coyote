@@ -1,14 +1,41 @@
 {% import 'components.modals' as modals %}
 
-{% if job.enable_apply and not job.is_expired %}
-    <div class="box-apply hidden-sm hidden-xs margin-md-bottom">
-        <span class="outline">
-            <a class="btn btn-primary" href="{{ route('job.application', [job.id]) }}" {{ applied ? 'title="Już aplikowałeś na tę ofertę pracy" disabled' }}>Aplikuj na to stanowisko</a>
-        </span>
+{% if not job.is_expired %}
+    <div class="row margin-md-bottom">
+        <div class="col-xs-12">
+            <div id="box-action-bar">
+                <div class="col-xlg-6">
+                    {% set attr = is_applied ? {title: 'Już aplikowałeś na tę ofertę pracy', disabled: 'disabled' } : {} %}
 
-        {% if job.applications.count() == 0 %}
-            <img class="margin-md-top" src="{{ cdn('img/be-first-handwriting.png') }}">
-        {% endif %}
+                    {% if job.enable_apply %}
+                        {% set url = route('job.application', [job.id]) %}
+                    {% elseif is_url(job.getOriginal('recruitment')) %}
+                        {% set url = job.getOriginal('recruitment') %}
+                        {% set attr = attr|merge({'target': '_blank'}) %}
+                    {% else %}
+                        {% set url = "#apply" %}
+                    {% endif %}
+
+                    {{ link_to(url, 'Aplikuj', attr|merge({class: 'btn btn-primary'})) }}
+                </div>
+
+                <div class="col-xlg-6">
+                    <a class="btn btn-refer" href="{{ route('job.refer', [job]) }}"><i class="fa fa-retweet"></i> Poleć znajomemu</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row margin-md-bottom">
+        <div class="col-xs-12">
+            <h3>Dodatkowe pytania?</h3>
+
+            <i class="fa fa-info-circle fa-2x pull-left"></i>
+
+            <div class="pull-left margin-xs-left">
+                <a href="#comments" style="font-size: 15px" class="text-muted">Zadaj pytanie dotyczace tego ogłoszenia</a>
+            </div>
+        </div>
     </div>
 {% endif %}
 

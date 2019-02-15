@@ -2,6 +2,7 @@
 
 namespace Coyote\Http\Forms\Forum;
 
+use Coyote\Events\PostSubmitting;
 use Coyote\Http\Forms\AttachmentForm;
 use Coyote\Poll;
 use Coyote\Repositories\Contracts\Post\AttachmentRepositoryInterface;
@@ -19,8 +20,8 @@ class PostForm extends Form
 {
     const RULE_USER_NAME            = 'required|string|min:2|max:27';
     const RULE_USER_UNIQUE          = 'unique:users,name';
-    const RULE_SUBJECT              = 'sometimes|required|min:3|max:200';
-    const RULE_TEXT                 = 'required|spam_chinese:1';
+    const RULE_SUBJECT              = 'sometimes|required|min:3|max:200|spam_chinese:1';
+    const RULE_TEXT                 = 'required|spam_chinese:1|spam_foreign:1|spam_blacklist';
     const RULE_STICKY               = 'sometimes|bool';
     const RULE_TAGS                 = 'array|max:5';
     const RULE_TAG                  = 'max:25|tag|tag_creation:2';
@@ -86,6 +87,10 @@ class PostForm extends Form
                     );
                 }
             }
+        });
+
+        $this->addEventListener(FormEvents::PRE_SUBMIT, function (Form $form) {
+            PostSubmitting::dispatch($form);
         });
     }
 

@@ -3,12 +3,14 @@
 namespace Coyote\Console\Commands;
 
 use Coyote\Http\Factories\MailFactory;
+use Coyote\Job;
+use Coyote\Notifications\Job\ExpiredNotification;
+use Coyote\Repositories\Contracts\JobRepositoryInterface as JobRepository;
 use Coyote\Repositories\Contracts\UserRepositoryInterface as UserRepository;
 use Coyote\Services\Elasticsearch\ResultSet;
 use Coyote\User;
 use Elasticsearch\Client;
 use Illuminate\Console\Command;
-use Illuminate\Mail\Message;
 
 class PurgeJobsCommand extends Command
 {
@@ -39,14 +41,20 @@ class PurgeJobsCommand extends Command
     protected $user;
 
     /**
+     * @var JobRepository
+     */
+    protected $job;
+
+    /**
      * @var array
      */
     private $params = [];
 
     /**
      * @param UserRepository $user
+     * @param JobRepository $job
      */
-    public function __construct(UserRepository $user)
+    public function __construct(UserRepository $user, JobRepository $job)
     {
         parent::__construct();
 
@@ -67,6 +75,7 @@ class PurgeJobsCommand extends Command
         ];
 
         $this->user = $user;
+        $this->job = $job;
     }
 
     /**
@@ -84,21 +93,20 @@ class PurgeJobsCommand extends Command
             $user = $this->user->find($hit['user_id'], ['name', 'email']);
 
             if ($user !== null && $user->email) {
-                $this->sendEmail($user, $hit);
-                $this->info(sprintf('Sending e-mail about ending offer: %s.', $hit['title']));
+                $job = $this->job->find($hit['id']);
+
+                $this->sendEmail($user, $job);
+                $this->info(sprintf('Sending e-mail about ending offer: %s.', $job->title));
             }
         }
     }
 
     /**
      * @param User $user
-     * @param array $hit
+     * @param Job $job
      */
-    private function sendEmail(User $user, array $hit)
+    private function sendEmail(User $user, Job $job)
     {
-        $this->getMailFactory()->queue('emails.job.expired', $hit, function (Message $message) use ($hit, $user) {
-            $message->subject('Twoje ogłoszenie "' . $hit['title'] . '" wygasło.');
-            $message->to($user->email);
-        });
+        $user->notify(new ExpiredNotification($job));
     }
 }

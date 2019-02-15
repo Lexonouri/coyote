@@ -1,3 +1,50 @@
+##2.3
+
+**Ogólne**
+- Upgrade do Laravel 5.7
+- Rezygnacja z MongoDB na rzecz PostgreSQL + Elasticsearch
+- Upgrade do Webpack 4, rezygnacja z Gulp
+- Rezygnacja z Geshi na rzecz Prism
+
+**Forum**
+- Zapisywanie informacji o powodzie usunięcia postów, w tabeli posts
+- Zapisywanie informacji o dacie przeniesienia/zablokowania wątku, w tabeli topics
+- Na stronie głównej, ostatnia aktywność na forum prezentuje tylko wątki z kategorii, które nie są przez danego użytkownika niewidoczne
+
+**Praca**
+- Możliwość komentowania ofert pracy
+- Ustawienie sortowania nie jest zapamiętywane (domyślnie sortowanie zawsze po dacie)
+- W przypadku wyszukiwania, ustawienie sortowania na "Trafność" zamiast "Data dodania"
+
+## 2.2
+
+**Ogólne**
+- Upgrade do Laravel 5.4
+- "Przyklejony" breadcrumb nie znika na ekranie po pewnym czasie nieaktywności
+- Użycie intervention/image do tworzenia miniatur obrazów
+- Upgrade do PHP 7.2
+
+**Praca**
+
+- W e-mailu informującym o zakończeniu publikacji ogłoszenia, dodanie opcji ponownego wystawienia oferty
+- Zmiana algorytmu wyświetlającego reklamy ofert pracy (teraz bazuje na historii danego usera)
+- Wyświetlanie logo danego języka przy filtrach
+- Możliwość dodawania zdjęć (oraz filmu) do ogłoszeń pracy
+- Grupowanie wymagań w ofertach pracy (tagi) w kategorie
+- Dodanie limitu 5 MB w załączniku w aplikacjach ofert pracy
+- Możliwość zapamiętywania danych wprowadzonych w formularzu
+- Zwiększenie rozmiarów loga firm
+- Graficzna zmiana maila informującego o nowej aplikacji na dane stanowisko
+
+**Panel administracjyjny**
+
+- Możliwość edycji drugiego (długiego) tytułu dla kategorii forum
+
+**Forum**
+
+- Blokada edycji oraz usuwania postów (jeżeli nie jest ostatnim w danym wątku) jeżeli użytkownik ma mniej niż 100 punktów reputacji.
+- Użytkownik ma możliwość dalszej edycji swojego postu mimo tego, że napisane zostały dalsze odpowiedzi (pod warunkiem, że nie upłynęło 24h)
+
 ## 2.1
 
 **Ogólne**

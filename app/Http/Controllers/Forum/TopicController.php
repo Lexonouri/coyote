@@ -6,11 +6,11 @@ use Coyote\Forum;
 use Coyote\Forum\Reason;
 use Coyote\Http\Factories\CacheFactory;
 use Coyote\Http\Factories\FlagFactory;
-use Coyote\Repositories\Contracts\StreamRepositoryInterface as StreamRepository;
 use Coyote\Repositories\Contracts\UserRepositoryInterface as User;
 use Coyote\Repositories\Criteria\Forum\OnlyThoseWithAccess;
-use Coyote\Repositories\Criteria\Post\ObtainSubscribers;
+use Coyote\Repositories\Criteria\Post\WithSubscribers;
 use Coyote\Repositories\Criteria\Post\WithTrashed;
+use Coyote\Repositories\Criteria\Post\WithTrashedInfo;
 use Coyote\Services\Elasticsearch\Builders\Forum\MoreLikeThisBuilder;
 use Coyote\Services\Forum\TreeBuilder;
 use Coyote\Services\Parser\Parsers\ParserInterface;
@@ -49,14 +49,17 @@ class TopicController extends BaseController
         $perPage = $this->postsPerPage($request);
 
         // user with forum-update ability WILL see every post
+        // NOTE: criteria MUST BE pushed before calling getPage() method!
         if ($this->gate->allows('delete', $forum)) {
             $this->post->pushCriteria(new WithTrashed());
+            $this->post->pushCriteria(new WithTrashedInfo());
+
             // user is able to see real number of posts in this topic
             $replies = $topic->replies_real;
         }
 
         // user wants to show certain post. we need to calculate page number based on post id.
-        if ($request->has('p')) {
+        if ($request->filled('p')) {
             $page = $this->post->getPage(min(2147483647, (int) $request->get('p')), $topic->id, $perPage);
         }
 
@@ -75,7 +78,7 @@ class TopicController extends BaseController
             return $mlt;
         });
 
-        $this->post->pushCriteria(new ObtainSubscribers($this->userId));
+        $this->post->pushCriteria(new WithSubscribers($this->userId));
 
         // magic happens here. get posts for given topic (including first post for every page)
         /* @var \Illuminate\Support\Collection $posts */
@@ -85,6 +88,7 @@ class TopicController extends BaseController
         start_measure('Parsing...');
         $parser = $this->getParsers();
 
+        /** @var \Coyote\Post $post */
         foreach ($posts as &$post) {
             // parse post or get it from cache
             $post->text = $parser['post']->parse($post->text);
@@ -96,6 +100,9 @@ class TopicController extends BaseController
             foreach ($post->comments as &$comment) {
                 $comment->text = $parser['comment']->setUserId($comment->user_id)->parse($comment->text);
             }
+
+            $post->setRelation('topic', $topic);
+            $post->setRelation('forum', $forum);
         }
 
         stop_measure('Parsing...');
@@ -104,21 +111,20 @@ class TopicController extends BaseController
         $dateTimeString = $posts->last()->created_at->toDateTimeString();
 
         if ($markTime[Topic::class] < $dateTimeString && $markTime[Forum::class] < $dateTimeString) {
-            // mark topic as read
-            $topic->markAsRead($dateTimeString, $this->userId, $this->guestId);
+            // mark topic as read. the date MUST be data of last post on this page
+            $topic->markAsRead($dateTimeString, $this->guestId);
             $isUnread = true;
 
             if ($markTime[Forum::class] < $dateTimeString) {
                 $isUnread = $this->topic->isUnread(
                     $forum->id,
                     $markTime[Forum::class],
-                    $this->userId,
                     $this->guestId
                 );
             }
 
             if (!$isUnread) {
-                $this->forum->markAsRead($forum->id, $this->userId, $this->guestId);
+                $this->forum->markAsRead($forum->id, $this->guestId);
             }
         }
 
@@ -137,24 +143,21 @@ class TopicController extends BaseController
 
             if ($this->gate->allows('delete', $forum)) {
                 $flags = $this->getFlags($postsId);
-                $activities = $this->getActivities($postsId);
             }
 
             $this->forum->skipCriteria(true);
             $adminForumList = $treeBuilder->listBySlug($this->forum->list());
         }
 
-        // informacje o powodzie zablokowania watku, przeniesienia itp
-        $warnings = $this->getWarnings($topic);
-
         $form = $this->getForm($forum, $topic);
 
         return $this->view(
             'forum.topic',
-            compact('posts', 'forum', 'topic', 'paginate', 'forumList', 'adminForumList', 'reasonList', 'form', 'mlt', 'flags', 'warnings', 'activities')
+            compact('posts', 'forum', 'topic', 'paginate', 'forumList', 'adminForumList', 'reasonList', 'form', 'mlt', 'flags')
         )->with([
             'markTime'      => $markTime[Topic::class] ? $markTime[Topic::class] : $markTime[Forum::class],
-            'subscribers'   => $this->userId ? $topic->subscribers()->pluck('topic_id', 'user_id') : []
+            'subscribers'   => $this->userId ? $topic->subscribers()->pluck('topic_id', 'user_id') : [],
+            'author_id'     => $posts[0]->user_id
         ]);
     }
 
@@ -177,45 +180,6 @@ class TopicController extends BaseController
     private function getFlags($postsId)
     {
         return $this->getFlagFactory()->takeForPosts($postsId);
-    }
-
-    /**
-     * @param int[] $postsId
-     * @return array
-     */
-    private function getActivities($postsId)
-    {
-        $activities = [];
-
-        // here we go. if user has delete ability, for sure he/she would like to know
-        // why posts were deleted and by whom
-        $collection = $this->findByObject('post', $postsId, 'delete');
-
-        foreach ($collection->sortByDesc('created_at')->groupBy('object.id') as $row) {
-            $activities[$row->first()['object.id']] = $row->first();
-        }
-
-        return $activities;
-    }
-
-    /**
-     * @param \Coyote\Topic $topic
-     * @return array
-     */
-    private function getWarnings($topic)
-    {
-        $warnings = [];
-
-        // if topic is locked we need to fetch information when and by whom
-        if ($topic->is_locked) {
-            $warnings['lock'] = $this->findByObject('topic', $topic->id, 'lock')->last();
-        }
-
-        if ($topic->prev_forum_id) {
-            $warnings['move'] = $this->findByObject('topic', $topic->id, 'move')->last();
-        }
-
-        return $warnings;
     }
 
     /**
@@ -244,24 +208,17 @@ class TopicController extends BaseController
     public function prompt($id, User $user, Request $request)
     {
         $this->validate($request, ['q' => 'username']);
-        $usersId = [];
 
         $posts = $this->post->findAllBy('topic_id', $id, ['id', 'user_id']);
         $posts->load('comments'); // load comments assigned to posts
 
-        foreach ($posts as $post) {
-            if ($post->user_id) {
-                $usersId[] = $post->user_id;
-            }
+        $usersId = $posts->pluck('user_id')->toArray();
 
-            foreach ($post->comments as $comment) {
-                if ($comment->user_id) {
-                    $usersId[] = $comment->user_id;
-                }
-            }
-        }
+        $posts->pluck('comments')[0]->each(function ($comment) use (&$usersId) {
+            $usersId[] = $comment->user_id;
+        });
 
-        return view('components.prompt')->with('users', $user->lookupName($request['q'], array_unique($usersId)));
+        return view('components.prompt')->with('users', $user->lookupName($request['q'], array_filter(array_unique($usersId))));
     }
 
     /**
@@ -270,27 +227,14 @@ class TopicController extends BaseController
     public function mark($topic)
     {
         // pobranie daty i godziny ostatniego razy gdy uzytkownik przeczytal to forum
-        $forumMarkTime = $topic->forum->markTime($this->userId, $this->guestId);
+        $forumMarkTime = $topic->forum->markTime($this->guestId);
 
         // mark topic as read
-        $topic->markAsRead($topic->last_post_created_at, $this->userId, $this->guestId);
-        $isUnread = $this->topic->isUnread($topic->forum_id, $forumMarkTime, $this->userId, $this->guestId);
+        $topic->markAsRead($topic->last_post_created_at, $this->guestId);
+        $isUnread = $this->topic->isUnread($topic->forum_id, $forumMarkTime, $this->guestId);
 
         if (!$isUnread) {
-            $this->forum->markAsRead($topic->forum_id, $this->userId, $this->guestId);
+            $this->forum->markAsRead($topic->forum_id, $this->guestId);
         }
-    }
-
-    /**
-     * @param string $object
-     * @param $id
-     * @param string $verb
-     * @return mixed
-     */
-    protected function findByObject($object, $id, $verb)
-    {
-        return app(StreamRepository::class)->findWhere(
-            ['object.objectType' => $object, 'object.id' => $id, 'verb' => $verb]
-        );
     }
 }

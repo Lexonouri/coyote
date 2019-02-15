@@ -11,14 +11,27 @@ class ForumPolicy
     use HandlesAuthorization;
 
     /**
-     * @param string $ability
+     * @param User|null $user
+     * @param Forum $forum
+     * @return bool
+     */
+    public function write(?User $user, Forum $forum): bool
+    {
+        if (!$forum->enable_anonymous && $user === null) {
+            return false;
+        }
+
+        return !$forum->is_locked ? true : ($user !== null ? $this->update($user, $forum) : false);
+    }
+
+    /**
      * @param User $user
      * @param Forum $forum
      * @return bool
      */
-    private function check($ability, User $user, Forum $forum)
+    public function update(User $user, Forum $forum)
     {
-        return $forum->ability($ability, $user->id) || $user->can($ability);
+        return $this->check('forum-update', $user, $forum);
     }
 
     /**
@@ -76,9 +89,9 @@ class ForumPolicy
      * @param Forum $forum
      * @return bool
      */
-    public function update(User $user, Forum $forum)
+    public function delete(User $user, Forum $forum)
     {
-        return $this->check('forum-update', $user, $forum);
+        return $this->check('forum-delete', $user, $forum);
     }
 
     /**
@@ -86,8 +99,37 @@ class ForumPolicy
      * @param Forum $forum
      * @return bool
      */
-    public function delete(User $user, Forum $forum)
+    public function access(?User $user, Forum $forum): bool
     {
-        return $this->check('forum-delete', $user, $forum);
+        $groups = $forum->groups()->get()->pluck('id')->toArray();
+
+        if (empty($groups)) {
+            return true;
+        }
+
+        // if access to this category is restricted to some groups, it's logical that guest user
+        // does not belong to any group.
+        if ($user === null) {
+            return false;
+        }
+
+        foreach ($user->groups()->get() as $group) {
+            if (in_array($group->id, $groups)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param string $ability
+     * @param User $user
+     * @param Forum $forum
+     * @return bool
+     */
+    private function check($ability, User $user, Forum $forum)
+    {
+        return $forum->ability($ability, $user->id) || $user->can($ability);
     }
 }

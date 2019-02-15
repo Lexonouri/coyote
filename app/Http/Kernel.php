@@ -1,4 +1,6 @@
-<?php namespace Coyote\Http;
+<?php
+
+namespace Coyote\Http;
 
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
 
@@ -10,7 +12,12 @@ class Kernel extends HttpKernel
      * @var array
      */
     protected $middleware = [
-        \Illuminate\Foundation\Http\Middleware\CheckForMaintenanceMode::class
+        \Illuminate\Foundation\Http\Middleware\CheckForMaintenanceMode::class,
+        \Illuminate\Foundation\Http\Middleware\ValidatePostSize::class,
+        Middleware\TrimStrings::class,
+        // before using this middleware, we need to change validation rules that requires string instead of null
+//        \Illuminate\Foundation\Http\Middleware\ConvertEmptyStringsToNull::class,
+        Middleware\TrustProxies::class
     ];
 
     /**
@@ -20,19 +27,20 @@ class Kernel extends HttpKernel
      */
     protected $middlewareGroups = [
         'web' => [
-            \Coyote\Http\Middleware\EncryptCookies::class,
+            Middleware\EncryptCookies::class,
             \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
             \Illuminate\Session\Middleware\StartSession::class,
             Middleware\SetupGuestCookie::class,
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
-            \Coyote\Http\Middleware\VerifyCsrfToken::class,
+            Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             Middleware\DefaultBindings::class,
-            \Coyote\Http\Middleware\FirewallBlacklist::class
+            Middleware\FirewallBlacklist::class
         ],
         'api' => [
             'throttle:60,1',
-            'bindings'
+            'bindings',
+            'bindings.default'
         ],
     ];
 
@@ -45,24 +53,43 @@ class Kernel extends HttpKernel
         'auth'          => Middleware\Authenticate::class,
         'auth.basic'    => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
         'bindings'      => \Illuminate\Routing\Middleware\SubstituteBindings::class,
-//        'bindings.default'  => Middleware\DefaultBindings::class,
+        'throttle'      => \Illuminate\Routing\Middleware\ThrottleRequests::class,
+        'bindings.default'  => Middleware\DefaultBindings::class,
         'can'           => \Illuminate\Auth\Middleware\Authorize::class,
         'guest'         => Middleware\RedirectIfAuthenticated::class,
+        'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
+        'signed'        => \Illuminate\Routing\Middleware\ValidateSignature::class,
+        'verified'      => \Illuminate\Auth\Middleware\EnsureEmailIsVerified::class,
         'adm'           => Middleware\AdmAccess::class,
-        'forum.access'  => Middleware\ForumAccess::class,
         'forum.write'   => Middleware\ForumWrite::class,
         'forum.url'     => Middleware\RedirectIfUrl::class,
         'topic.access'  => Middleware\RedirectIfMoved::class,
         'job.session'   => Middleware\VerifyJobSession::class,
-        'job.revalidate'=> Middleware\RevalidateJobSession::class,
+        'job.forget'    => Middleware\ForgetJobDraft::class,
         'job.redirect'  => Middleware\PermanentRedirect::class,
         'topic.scroll'  => Middleware\ScrollToPost::class,
         'post.response' => Middleware\PostSubmitResponse::class,
         'comment.access' => Middleware\CommentAccess::class,
         'wiki.access'   => Middleware\WikiAccess::class,
         'wiki.lock'     => Middleware\WikiLock::class,
+        'wiki.legacy'   => Middleware\WikiLegacy::class,
         'page.hit'      => Middleware\PageHit::class,
-        'cache'         => Middleware\CacheController::class,
         'geocode'       => Middleware\GeocodeIp::class
+    ];
+
+    /**
+     * The priority-sorted list of middleware.
+     *
+     * This forces non-global middleware to always be in the given order.
+     *
+     * @var array
+     */
+    protected $middlewarePriority = [
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        Middleware\Authenticate::class,
+        \Illuminate\Session\Middleware\AuthenticateSession::class,
+        \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        \Illuminate\Auth\Middleware\Authorize::class,
     ];
 }

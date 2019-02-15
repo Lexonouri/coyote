@@ -17,9 +17,6 @@ return [
         '_forum' => [
             'auto_activate'    => false,
             'restful'          => true
-        ],
-        'job_tabs' => [
-            'auto_activate'    => false
         ]
     ],
     '__master_menu___' => [
@@ -42,8 +39,7 @@ return [
                 '(X)HTML' => ['url' => '(X)HTML'],
                 'CSS' => ['url' => 'CSS']
             ]
-        ],
-        'Czat' => ['url' => 'http://chat.4programmers.net/']
+        ]
     ],
     // _ na poczatku gdyz ten plugin korzysta z metody share() klasy View, a nazwa "forum" moze
     // wchodzic w konflikt z innymi zmiennymi przekazywanymi do twiga
@@ -54,10 +50,5 @@ return [
         'Obserwowane' => ['route' => 'forum.subscribes', 'data' => ['role' => true]],
         'Moje' => ['route' => 'forum.mine', 'data' => ['role' => true], 'title' => 'Wątki w których brałem udział'],
         'Moje tagi' => ['route' => 'forum.interesting', 'title' => 'Wątki zawierające moje tagi']
-    ],
-    '_jobs' => [
-        'Wszystkie' => ['route' => ['job.home', 'tab' => 'all'], 'nickname' => 'all'],
-        'Wybrane dla mnie' => ['route' => ['job.home', 'tab' => 'filtered'], 'nickname' => 'filtered'],
-        'Moje oferty' => ['route' => 'job.my', 'nickname' => 'my_offers', 'data' => ['role' => true]]
     ]
 ];

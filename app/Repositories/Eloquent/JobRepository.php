@@ -3,11 +3,12 @@
 namespace Coyote\Repositories\Eloquent;
 
 use Coyote\Feature;
-use Coyote\Payment;
+use Coyote\Models\Job\Draft;
 use Coyote\Repositories\Contracts\JobRepositoryInterface;
 use Coyote\Job;
 use Coyote\Repositories\Contracts\SubscribableInterface;
 use Coyote\Str;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Query\JoinClause;
 
 /**
@@ -92,7 +93,7 @@ class JobRepository extends Repository implements JobRepositoryInterface, Subscr
             ->orderBy($this->raw('COUNT(*)'), 'DESC')
             ->limit($limit)
             ->get()
-            ->pluck('count', 'name');
+            ->pluck('name');
     }
 
     /**
@@ -203,26 +204,25 @@ class JobRepository extends Repository implements JobRepositoryInterface, Subscr
     /**
      * @inheritdoc
      */
-    public function getExpiredOffers()
+    public function setDraft(int $userId, string $key, string $value): void
     {
-        $sub = $this->toSql(
-            $this
-                ->app
-                ->make(Payment::class)
-                ->selectRaw('DISTINCT ON(job_id) job_id, ends_at')
-                ->where('status_id', Payment::PAID)
-                ->orderBy('job_id', 'DESC')
-                ->orderBy('ends_at', 'DESC')
-        );
+        $this->app[Draft::class]->updateOrCreate(['user_id' => $userId, 'key' => $key], ['value' => $value]);
+    }
 
-        return $this
-            ->model
-            ->select('jobs.*')
-            ->join($this->raw("($sub) AS payments"), function (JoinClause $join) {
-                $join->on('payments.job_id', '=', 'jobs.id')->on('ends_at', '<', $this->raw('NOW()'));
-            })
-            ->where('boost', 1)
-            ->get();
+    /**
+     * @inheritdoc
+     */
+    public function getDraft(int $userId, string $key): ?string
+    {
+        return $this->app[Draft::class]->where('user_id', $userId)->where('key', $key)->value('value');
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function forgetDraft(int $userId): void
+    {
+        $this->app[Draft::class]->where('user_id', $userId)->delete();
     }
 
     /**

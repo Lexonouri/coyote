@@ -9,16 +9,10 @@ use Coyote\Repositories\Contracts\Post\CommentRepositoryInterface as CommentRepo
 use Coyote\Repositories\Contracts\PostRepositoryInterface as PostRepository;
 use Coyote\Repositories\Contracts\TopicRepositoryInterface as TopicRepository;
 use Illuminate\Contracts\Auth\Access\Gate;
-use Illuminate\Contracts\Auth\Guard;
 use Illuminate\Http\Request;
 
 class CommentAccess
 {
-    /**
-     * @var Guard
-     */
-    protected $auth;
-
     /**
      * @var Gate
      */
@@ -50,7 +44,6 @@ class CommentAccess
     protected $request;
 
     /**
-     * @param Guard $auth
      * @param Gate $gate
      * @param ForumRepository $forum
      * @param TopicRepository $topic
@@ -58,14 +51,12 @@ class CommentAccess
      * @param CommentRepository $comment
      */
     public function __construct(
-        Guard $auth,
         Gate $gate,
         ForumRepository $forum,
         TopicRepository $topic,
         PostRepository $post,
         CommentRepository $comment
     ) {
-        $this->auth = $auth;
         $this->gate = $gate;
         $this->forum = $forum;
         $this->topic = $topic;
@@ -111,15 +102,14 @@ class CommentAccess
         $forum = $topic->forum;
 
         // Maybe user does not have an access to this category?
-        if (!$forum->userCanAccess($this->auth->id())) {
+        if ($this->gate->denies('access', $forum)) {
             return response('Unauthorized.', 401);
         }
 
-        // Only moderators can delete this post if topic (or forum) was locked
-        if ($this->gate->denies('delete', $forum)) {
-            if ($topic->is_locked || $forum->is_locked || $post->deleted_at) {
-                return response('Unauthorized.', 401);
-            }
+        // Only moderators can post comment if topic (or forum) was locked
+        // todo: move this code to PostCommentPolicy
+        if ($this->gate->denies('write', $forum) || $this->gate->denies('write', $topic)) {
+            return response('Unauthorized.', 401);
         }
 
         $this->request->attributes->add([

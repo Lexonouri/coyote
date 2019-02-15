@@ -2,8 +2,10 @@
 
 namespace Coyote\Http\Forms\Job;
 
-use Coyote\Country;
 use Coyote\Firm;
+use Coyote\Industry;
+use Coyote\Repositories\Contracts\CountryRepositoryInterface as CountryRepository;
+use Coyote\Repositories\Contracts\IndustryRepositoryInterface as IndustryRepository;
 use Coyote\Services\FormBuilder\Form;
 use Coyote\Services\FormBuilder\FormEvents;
 use Coyote\Services\Media\Factory as MediaFactory;
@@ -23,6 +25,16 @@ class FirmForm extends Form
     protected $data;
 
     /**
+     * @var IndustryRepository
+     */
+    protected $industry;
+
+    /**
+     * @var CountryRepository
+     */
+    protected $country;
+
+    /**
      * It's public so we can use use attr from twig
      *
      * @var array
@@ -31,13 +43,20 @@ class FirmForm extends Form
         'method' => self::POST
     ];
 
-    public function __construct()
+    /**
+     * @param IndustryRepository $industry
+     * @param CountryRepository $country
+     */
+    public function __construct(IndustryRepository $industry, CountryRepository $country)
     {
         parent::__construct();
 
+        $this->industry = $industry;
+        $this->country = $country;
+
         $this->addEventListener(FormEvents::POST_SUBMIT, function (FirmForm $form) {
             if ($form->get('country')->getValue()) {
-                $assoc = array_flip(Country::getCountriesList());
+                $assoc = array_flip($this->country->pluck('name', 'id'));
 
                 if (isset($assoc[$form->get('country')->getValue()])) {
                     // transform country name to country id
@@ -49,6 +68,7 @@ class FirmForm extends Form
         $this->addEventListener(FormEvents::POST_SUBMIT, function (FirmForm $form) {
             $data = $form->all();
             $data['benefits'] = array_filter(array_unique(array_map('trim', $data['benefits'])));
+            $data['youtube_url'] = $this->getEmbedUrl($form->get('youtube_url')->getValue());
 
             // if agency - set null value. we don't to show them with agencies offers
             if ($form->get('is_agency')->getValue()) {
@@ -67,6 +87,24 @@ class FirmForm extends Form
 
             // call macro and replace collection items
             $this->data->benefits->replace($models);
+
+            $models = [];
+
+            foreach ($data['gallery'] as $photo) {
+                if (!empty($photo)) {
+                    $models[] = new Firm\Gallery(['file' => $photo]);
+                }
+            }
+
+            // call macro and replace collection items
+            $this->data->gallery->replace($models);
+
+            $models = [];
+
+            foreach ((array) $data['industries'] as $industry) {
+                $models[] = new Industry(['id' => $industry]);
+            }
+            $this->data->industries->replace($models);
             $this->data->fill($data);
 
             // new firm has empty ID.
@@ -156,6 +194,15 @@ class FirmForm extends Form
                     'v-model' => 'firm.logo'
                 ]
             ])
+            ->add('industries', 'select', [
+                'label' => 'Branża',
+                'help' => 'Możesz wybrać jedną lub kilka branż w których działa firma.',
+                'choices' => $this->industry->getAlphabeticalList(),
+                'attr' => [
+                    'id' => 'industries',
+                    'multiple' => 'multiple'
+                ]
+            ])
             ->add('description', 'textarea', [
                 'label' => 'Opis firmy',
                 'rules' => 'string',
@@ -204,6 +251,21 @@ class FirmForm extends Form
                 'row_attr' => [
                     ':class' => "{'has-error': isInvalid(['headline'])}",
                     'v-show' => 'firm.is_agency == 0'
+                ]
+            ])
+            ->add('gallery', 'collection', [
+                'label' => 'Dodaj zdjęcia',
+                'child_attr' => [
+                    'type' => 'child_form',
+                    'class' => GalleryForm::class
+                ]
+            ])
+            ->add('youtube_url', 'text', [
+                'rules' => 'string|max:255|url|host:youtube.com,youtu.be',
+                'label' => 'Nagranie wideo w Youtube',
+                'help' => 'Film promujący firmę będzie wyświetlany pod ogłoszeniem o pracę.',
+                'attr' => [
+                    'v-model' => 'firm.youtube_url'
                 ]
             ])
             ->add('latitude', 'hidden', [
@@ -297,6 +359,16 @@ class FirmForm extends Form
             $json['logo'] = $this->get('logo')->getValue()->getFilename();
         }
 
+        $json['gallery'] = [];
+
+        foreach ($this->get('gallery')->getChildrenValues() as $gallery) {
+            if (!empty($gallery) && $gallery instanceof Firm\Gallery) {
+                $json['gallery'][] = ['file' => $gallery->file, 'url' => (string) $gallery->photo->url()];
+            }
+        }
+
+        $json['gallery'][] = ['file' => ''];
+
         return json_encode($json);
     }
 
@@ -305,5 +377,26 @@ class FirmForm extends Form
         if ($this->data instanceof Firm && !$this->isSubmitted()) {
             $this->get('benefits')->setValue($this->data->benefits->all());
         }
+    }
+
+    /**
+     * @param string $url
+     * @return string
+     */
+    private function getEmbedUrl($url)
+    {
+        if (empty($url)) {
+            return '';
+        }
+
+        $components = parse_url($url);
+
+        if (empty($components['query'])) {
+            return $url;
+        }
+
+        parse_str($components['query'], $query);
+
+        return 'https://www.youtube.com/embed/' . $query['v'];
     }
 }

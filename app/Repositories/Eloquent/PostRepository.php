@@ -85,7 +85,7 @@ class PostRepository extends Repository implements PostRepositoryInterface
     public function getPage($postId, $topicId, $perPage = 10)
     {
         $count = $this->applyCriteria(function () use ($topicId, $postId) {
-            return $this->model->where('topic_id', $topicId)->where('id', '<', $postId)->count();
+            return $this->model->where('topic_id', $topicId)->where('posts.id', '<', $postId)->count();
         });
 
         return max(0, floor(($count - 1) / $perPage)) + 1;
@@ -161,7 +161,7 @@ class PostRepository extends Repository implements PostRepositoryInterface
 
             $post->ip = $form->getRequest()->ip();
             $post->browser = str_limit($form->getRequest()->browser(), 250);
-            $post->host = str_limit(gethostbyaddr($form->getRequest()->ip()), 250);
+            $post->host = str_limit($form->getRequest()->getClientHost(), 250);
         }
 
         $log->fillWithPost($post)->fill(['subject' => $topic->subject, 'tags' => $tags]);
@@ -218,7 +218,7 @@ class PostRepository extends Repository implements PostRepositoryInterface
             'user_id'   => $userId,
             'ip'        => request()->ip(),
             'browser'   => request()->browser(),
-            'host'      => gethostbyaddr(request()->ip())
+            'host'      => request()->getClientHost()
         ];
 
         if ($previous->id == $post->topic->first_post_id) {
@@ -463,7 +463,8 @@ class PostRepository extends Repository implements PostRepositoryInterface
             ->leftJoin('users AS author', 'author.id', '=', 'posts.user_id')
             ->leftJoin('users AS editor', 'editor.id', '=', 'editor_id')
             ->leftJoin('groups', 'groups.id', '=', 'author.group_id')
-            ->leftJoin('post_accepts AS pa', 'pa.post_id', '=', 'posts.id');
+            ->leftJoin('post_accepts AS pa', 'pa.post_id', '=', 'posts.id')
+            ->orderBy('posts.id'); // <-- make sure that posts are in the right order!
 
         $this->resetModel();
 
@@ -480,6 +481,7 @@ class PostRepository extends Repository implements PostRepositoryInterface
         $sql = clone $this->model;
 
         foreach ($this->getCriteria() as $criteria) {
+            // include only this criteria to fetch deleted posts (only for users with special access)
             if ($criteria instanceof WithTrashed) {
                 $sql = $criteria->apply($sql, $this);
             }

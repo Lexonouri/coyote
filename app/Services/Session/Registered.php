@@ -23,7 +23,7 @@ class Registered
     }
 
     /**
-     * @param Session[] $collection
+     * @param Collection $collection
      * @return Collection
      */
     public function setup(Collection $collection)
@@ -45,6 +45,6 @@ class Registered
             }
         }
 
-        return $collection->sortBy('name');
+        return $collection->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE);
     }
 }

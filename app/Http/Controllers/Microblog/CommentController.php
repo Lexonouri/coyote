@@ -3,17 +3,19 @@
 namespace Coyote\Http\Controllers\Microblog;
 
 use Coyote\Http\Controllers\Controller;
+use Coyote\Http\Requests\MicroblogRequest;
+use Coyote\Notifications\Microblog\UserMentionedNotification;
+use Coyote\Notifications\Microblog\SubmittedNotification;
 use Coyote\Services\Parser\Helpers\Login as LoginHelper;
 use Coyote\Services\Parser\Helpers\Hash as HashHelper;
 use Coyote\Repositories\Contracts\MicroblogRepositoryInterface as MicroblogRepository;
 use Coyote\Repositories\Contracts\UserRepositoryInterface as UserRepository;
-use Coyote\Services\Alert\Container;
 use Coyote\Services\Stream\Activities\Create as Stream_Create;
 use Coyote\Services\Stream\Activities\Update as Stream_Update;
 use Coyote\Services\Stream\Activities\Delete as Stream_Delete;
 use Coyote\Services\Stream\Objects\Microblog as Stream_Microblog;
 use Coyote\Services\Stream\Objects\Comment as Stream_Comment;
-use Coyote\Services\UrlBuilder\UrlBuilder;
+use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Http\Request;
 
 class CommentController extends Controller
@@ -43,17 +45,13 @@ class CommentController extends Controller
     /**
      * Publikowanie komentarza na mikroblogu
      *
-     * @param Request $request
+     * @param MicroblogRequest $request
+     * @param Dispatcher $dispatcher
      * @param \Coyote\Microblog $microblog
      * @return \Illuminate\Http\JsonResponse
      */
-    public function save(Request $request, $microblog)
+    public function save(MicroblogRequest $request, Dispatcher $dispatcher, $microblog)
     {
-        $this->validate($request, [
-            'parent_id'     => 'sometimes|integer|exists:microblogs,id',
-            'text'          => 'required|string|max:5000|throttle:' . $microblog->id
-        ]);
-
         if (!$microblog->exists) {
             $user = $this->auth;
             $data = $request->only(['text', 'parent_id']) + ['user_id' => $user->id];
@@ -67,49 +65,23 @@ class CommentController extends Controller
         $microblog->fill($data);
         $isSubscribed = false;
 
-        $this->transaction(function () use ($microblog, $user, &$isSubscribed) {
+        $this->transaction(function () use ($microblog, $user, $dispatcher, &$isSubscribed) {
             $microblog->save();
 
             // we need to get parent entry only for notification
             $parent = $microblog->parent;
 
+            $helper = new HashHelper();
+            $microblog->setTags($helper->grab($microblog->text));
+
+            // map microblog object into stream activity object
+            $object = (new Stream_Comment())->map($microblog);
+            $target = (new Stream_Microblog())->map($parent);
+
             if ($microblog->wasRecentlyCreated) {
-                $subscribers = $parent->subscribers()->pluck('user_id')->toArray();
-                $alert = new Container();
-
-                // we need to send alerts AFTER saving comment to database because we need ID of comment
-                $alertData = [
-                    'microblog_id'=> $microblog->parent_id, // <-- parent_id NOT id (to generate current alert's object_id)
-                    'content'     => $microblog->html,
-                    'excerpt'     => excerpt($microblog->html),
-                    'text'        => $microblog->html,
-                    'sender_id'   => $user->id,
-                    'sender_name' => $user->name,
-                    'subject'     => excerpt($parent->html), // original exerpt of parent entry
-                    'url'         => UrlBuilder::microblogComment($parent, $microblog->id)
-                ];
-
-                if ($subscribers) {
-                    // new comment. should we send a notification?
-                    $alert->attach(
-                        app('alert.microblog.subscriber')->with($alertData)->setUsersId($subscribers)
-                    );
-                }
-
-                $helper = new LoginHelper();
-                // get id of users that were mentioned in the text
-                $usersId = $helper->grab($microblog->html);
-
-                if (!empty($usersId)) {
-                    $alert->attach(app('alert.microblog.login')->with($alertData)->setUsersId($usersId));
-                }
-
-                // send a notify
-                $alert->notify();
-
                 // now we can add user to subscribers list (if he's not in there yet)
                 // after that he will receive notification about other users comments
-                if (!in_array($user->id, $subscribers)) {
+                if (!$parent->subscribers()->forUser($user->id)->exists()) {
                     $count = $this->microblog->where('parent_id', $parent->id)->where('user_id', $user->id)->count();
 
                     if ($count == 1) {
@@ -119,22 +91,33 @@ class CommentController extends Controller
                 } else {
                     $isSubscribed = true;
                 }
-
-                $activity = Stream_Create::class;
-            } else {
-                $activity = Stream_Update::class;
             }
 
-            $helper = new HashHelper();
-            $microblog->setTags($helper->grab($microblog->text));
-
-            // map microblog object into stream activity object
-            $object = (new Stream_Comment())->map($microblog);
-            $target = (new Stream_Microblog())->map($parent);
-
             // put item into stream activity
-            stream($activity, $object, $target);
+            stream($microblog->wasRecentlyCreated ? Stream_Create::class : Stream_Update::class, $object, $target);
         });
+
+        if ($microblog->wasRecentlyCreated) {
+            $subscribers = $microblog->parent
+                ->subscribers()
+                ->with('user')
+                ->get()
+                ->pluck('user')
+                ->exceptUser($this->auth);
+
+            $dispatcher->send($subscribers, new SubmittedNotification($microblog));
+
+            $helper = new LoginHelper();
+            // get id of users that were mentioned in the text
+            $usersId = $helper->grab($microblog->html);
+
+            if (!empty($usersId)) {
+                $dispatcher->send(
+                    $this->user->findMany($usersId)->exceptUser($this->auth)->exceptUsers($subscribers),
+                    new UserMentionedNotification($microblog)
+                );
+            }
+        }
 
         foreach (['name', 'is_blocked', 'is_active', 'photo'] as $key) {
             $microblog->{$key} = $user->{$key};

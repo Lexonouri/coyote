@@ -16,6 +16,7 @@ $this->group(
     function () {
         /** @var $this \Illuminate\Routing\Router */
         $this->get('Dashboard', 'DashboardController@index')->name('dashboard');
+        $this->get('Exit', 'ExitController@index')->name('exit');
 
         $this->get('Forum/Categories', 'Forum\CategoriesController@index')->name('forum.categories');
 
@@ -77,9 +78,6 @@ $this->group(
         $this->post('Firewall/Delete/{firewall}', 'FirewallController@delete')->name('firewall.delete');
 
         $this->get('Stream', 'StreamController@index')->name('stream');
-        $this->get('Cache', 'CacheController@index')->name('cache');
-
-        $this->get('Stream', 'StreamController@index')->name('stream');
 
         $this->get('Flag', 'FlagController@index')->name('flag');
         $this->get('Log', 'LogController@index')->name('log');
@@ -136,5 +134,12 @@ $this->group(
             'middleware' => 'can:adm-payment',
             'as' => 'payments.paid'
         ]);
+
+        $this->get('Tags', ['uses' => 'TagsController@index'])->name('tags');
+        $this->get('Tags/Save/{tag?}', 'TagsController@edit')->name('tags.save');
+        $this->post('Tags/Save/{tag?}', 'TagsController@save');
+
+        $this->get('Mailing', ['uses' => 'MailingController@index', 'middleware' => 'can:adm-payment'])->name('mailing');
+        $this->post('Mailing', ['uses' => 'MailingController@submit', 'middleware' => 'can:adm-payment']);
     }
 );

@@ -6,7 +6,9 @@ use Coyote\Http\Controllers\Controller;
 use Coyote\Http\Factories\MailFactory;
 use Coyote\Http\Forms\Job\ApplicationForm;
 use Coyote\Job;
-use Coyote\Mail\ApplicationSent;
+use Coyote\Notifications\Job\ApplicationConfirmationNotification;
+use Coyote\Notifications\Job\ApplicationSentNotification;
+use Coyote\Services\UrlBuilder\UrlBuilder;
 use Illuminate\Http\Request;
 use Coyote\Services\Stream\Activities\Create as Stream_Create;
 use Coyote\Services\Stream\Objects\Job as Stream_Job;
@@ -24,7 +26,7 @@ class ApplicationController extends Controller
             function (Request $request, $next) {
                 /** @var \Coyote\Job $job */
                 $job = $request->route('job');
-                abort_if($job->hasApplied($this->userId, $this->guestId), 404);
+                abort_if($job->applications()->forGuest($this->guestId)->exists(), 404);
 
                 return $next($request);
             },
@@ -42,7 +44,7 @@ class ApplicationController extends Controller
 
         $this->breadcrumb->push([
             'Praca'                             => route('job.home'),
-            $job->title                         => route('job.offer', [$job->id, $job->slug]),
+            $job->title                         => UrlBuilder::job($job),
             'Aplikuj na to stanowisko pracy'    => null
         ]);
 
@@ -59,6 +61,10 @@ class ApplicationController extends Controller
         // set default message
         $form->get('text')->setValue(view('job.partials.application', compact('job')));
 
+        if ($this->getSetting('job.application')) {
+            $form->setData(json_decode($this->getSetting('job.application')));
+        }
+
         return $this->view('job.application', compact('job', 'form'))->with(
             'subscribed',
             $this->userId ? $job->subscribers()->forUser($this->userId)->exists() : false
@@ -72,23 +78,18 @@ class ApplicationController extends Controller
      */
     public function save($job, ApplicationForm $form)
     {
-        $data = $form->all() + ['user_id' => $this->userId, 'session_id' => $this->guestId];
+        $data = $form->all() + ['guest_id' => $this->guestId];
 
         $this->transaction(function () use ($job, $form, $data) {
             $target = (new Stream_Job)->map($job);
 
-            $job->applications()->create($data);
+            /** @var \Coyote\Job\Application $application */
+            $application = $job->applications()->create($data);
 
-            $mailer = $this->getMailFactory();
-            // send mail to offer's owner
-            // we don't queue mail because it has attachment and unfortunately we can't serialize binary data
-            $mailer->to($job->email)->send(new ApplicationSent($form, $job));
+            $this->setSetting('job.application', $form->get('remember')->isChecked() ? $form->toJson() : '');
 
-            if ($form->get('cc')->isChecked()) {
-                // send to application author
-                // we don't queue mail because it has attachment and unfortunately we can't serialize binary data
-                $mailer->to($form->get('email')->getValue())->send(new ApplicationSent($form, $job));
-            }
+            $job->notify((new ApplicationSentNotification($application))->delay(10));
+            $application->notify(new ApplicationConfirmationNotification());
 
             stream(Stream_Create::class, new Stream_Application(['displayName' => $data['name']]), $target);
         });
@@ -107,7 +108,8 @@ class ApplicationController extends Controller
     public function upload(Request $request)
     {
         $this->validate($request, [
-            'cv'             => 'max:' . (config('filesystems.upload_max_size') * 1024) . '|mimes:pdf,doc,docx,rtf'
+            // only 5 MB file size limit. otherwise postfix may not handle it properly.
+            'cv'             => 'max:' . (5 * 1024) . '|mimes:pdf,doc,docx,rtf'
         ]);
 
         $filename = uniqid() . '_' . $request->file('cv')->getClientOriginalName();

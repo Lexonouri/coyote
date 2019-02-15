@@ -1,66 +1,113 @@
 {% extends 'job.base' %}
+{% import 'components.widgets' as widgets %}
+
 {% block title %}Płatność{{ parent() }}{% endblock %}
 
 {% block container %}
-    <div id="payment" class="row">
-        {{ form_start(form) }}
+    <div class="row">
+        <div class="col-md-9">
+            {% include 'job.submit.partials.indicator' with {'current': 4} %}
+        </div>
+    </div>
 
-        <main class="col-md-8">
+    <div id="payment" class="row" v-cloak>
+        {{ form_start(form) }}
+        {{ form_widget(form.payment_method) }}
+
+        <main class="col-md-9">
             <div class="panel panel-default">
                 <div class="panel-heading">
                     <i class="fa fa-lock fa-fw"></i> Płatność poprzez bezpieczne połączenie
                 </div>
-                <div class="panel-body">
+                <div class="panel-body" v-show="grossPrice > 0">
                     <div class="row">
-                        <div class="col-lg-5 hidden-md hidden-sm hidden-xs">
-                            <img src="{{ cdn('img/payment-secure.jpg') }}" class="img-responsive">
+                        <div class="col-lg-4" style="z-index: 1">
+                            <ul class="nav nav-left nav-stacked">
+                                <li role="presentation" :class="{'active': form.payment_method == 'card'}">
+                                    <a @click="setPaymentMethod('card')" href="javascript:">
+                                        <strong>Karta kredytowa/debetowa</strong>
+
+                                        <img src="{{ cdn('img/mastercard.png') }}">
+                                        <img src="{{ cdn('img/visa.png') }}">
+                                        <img src="{{ cdn('img/maestro.png') }}">
+
+                                        <small class="text-muted" style="display: block; margin-top: 9px; font-size: 10px;">Powered by PayLane</small>
+                                    </a>
+                                </li>
+
+                                <li role="presentation" :class="{'active': form.payment_method == 'transfer'}">
+                                    <a @click="setPaymentMethod('transfer')" href="javascript:">
+                                        <strong class="margin-sm-bottom">Przelew bankowy</strong>
+
+                                        <img src="{{ cdn('img/ipko.png') }}" class="margin-xs-right">
+                                        <img src="{{ cdn('img/mbank.png') }}" class="margin-xs-right">
+                                        <img src="{{ cdn('img/pekao.png') }}" class="margin-xs-right">
+
+                                        <i class="fa fa-ellipsis-h"></i>
+                                    </a>
+                                </li>
+                            </ul>
                         </div>
 
-                        <div class="col-lg-7 col-md-12">
-                            {{ form_row(form.name) }}
+                        <div class="col-lg-8 col-md-12">
+                            <div class="panel panel-default">
+                                <div id="card" v-show="form.payment_method === 'card'" class="panel-body">
+                                    {{ form_widget(form.price) }}
+                                    {{ form_row(form.name) }}
 
-                            <div class="form-group form-group-border credit-card-container has-feedback {{ errors.has('number') ? 'has-error' }}">
-                                {{ form_label(form.number) }}
+                                    <div class="form-group form-group-border credit-card-container has-feedback {{ errors.has('number') ? 'has-error' }}">
+                                        {{ form_label(form.number) }}
 
-                                <img src="{{ cdn('img/mastercard.png') }}" class="mastercard">
-                                <img src="{{ cdn('img/visa.png') }}" class="visa">
-                                <img src="{{ cdn('img/maestro.png') }}" class="maestro">
+                                        {{ form_widget(form.number) }}
+                                        {{ form_error(form.number) }}
+                                    </div>
 
-                                {{ form_widget(form.number) }}
-                                {{ form_error(form.number) }}
-                            </div>
-
-                            <div class="form-group">
-                                <div class="row">
-                                    <div class="col-sm-7 {{ errors.has('exp_month') ? 'has-error' }}">
-                                        <label class="control-label">Data ważności karty *</label>
-
+                                    <div class="form-group">
                                         <div class="row">
-                                            <div class="col-xs-7" style="padding-right: 0">
-                                                {{ form_widget(form.exp_month) }}
-                                                {{ form_error(form.exp_month) }}
+                                            <div class="col-sm-7 {{ errors.has('exp_month') ? 'has-error' }}">
+                                                <label class="control-label">Data ważności karty *</label>
+
+                                                <div class="row">
+                                                    <div class="col-xs-7" style="padding-right: 0">
+                                                        {{ form_widget(form.exp_month) }}
+                                                        {{ form_error(form.exp_month) }}
+                                                    </div>
+                                                    <div class="col-xs-5">
+                                                        {{ form_widget(form.exp_year) }}
+                                                        {{ form_error(form.exp_year) }}
+                                                    </div>
+                                                </div>
                                             </div>
-                                            <div class="col-xs-5">
-                                                {{ form_widget(form.exp_year) }}
-                                                {{ form_error(form.exp_year) }}
+
+                                            <div class="col-sm-5">
+                                                <div class="form-group has-feedback {{ errors.has('cvc') ? 'has-error' }}">
+                                                    {{ form_label(form.cvc) }}
+
+                                                    <img src="{{ cdn('img/cvc.png') }}" class="cvc">
+
+                                                    {{ form_widget(form.cvc) }}
+                                                    {{ form_error(form.cvc) }}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
+                                </div>
 
-                                    <div class="col-sm-5">
-                                        <div class="form-group has-feedback {{ errors.has('cvc') ? 'has-error' }}">
-                                            {{ form_label(form.cvc) }}
+                                <div id="transfer" v-show="form.payment_method === 'transfer'" class="panel-body">
+                                    <div class="row">
+                                        <p class="has-error text-center">{{ form_error(form.transfer_method) }}</p>
 
-                                            <img src="{{ cdn('img/cvc.png') }}" class="cvc">
+                                        <div class="col-sm-3 text-center margin-sm-bottom" v-for="bank in banks">
+                                            <label class="bank-logo" :class="bank._class" :for="bank._class"></label>
 
-                                            {{ form_widget(form.cvc) }}
-                                            {{ form_error(form.cvc) }}
+                                            <input type="radio" name="transfer_method" :value="bank.id" :id="bank._class">
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div class="row">
+                            {# v-if instade of v-show. remove invoice inputs from form if price == 0 #}
+                            <div class="row" v-if="grossPrice > 0">
                                 <div class="col-xs-12">
                                     <div class="well well-sm">
                                         <div class="checkbox margin-none">
@@ -74,7 +121,8 @@
                                 </div>
                             </div>
 
-                            <div class="invoice">
+                            {# v-if instade of v-show. remove invoice inputs from form if price == 0 #}
+                            <div class="invoice" v-if="grossPrice > 0">
                                 <div class="row">
                                     <div class="col-sm-7">
                                         {{ form_row(form.invoice.children.name) }}
@@ -117,50 +165,84 @@
                         <button type="submit" id="submit" class="btn btn-primary pull-right" data-submit-state="Realizacja płatności...">Zapłać i zapisz <i class="fa fa-angle-right"></i></button>
                     </div>
                 </div>
+
+                <div class="panel-body" v-show="grossPrice == 0">
+                    <h1 class="text-center"><i class="fa fa-check text-primary"></i> Płatność nie jest wymagana</h1>
+
+                    <div class="form-group text-center margin-md-top">
+                        <button type="submit" class="btn btn-primary btn-lg" data-submit-state="Zapisywanie...">Zapisz i zakończ</button>
+                    </div>
+                </div>
             </div>
         </main>
 
-        <aside class="col-md-4">
+        <aside class="col-md-3">
             <div class="panel panel-default panel-review" v-cloak>
                 <div class="panel-heading">
                     Twoja płatność obejmuje
                 </div>
 
                 <div class="panel-body">
-                    <div class="row margin-xs-top margin-xs-bottom">
-                        <div class="col-xs-6">
-                            Promocja ogłoszenia ({{ payment.days }} dni)
+                    <div class="margin-xs-top margin-xs-bottom clearfix">
+                        <div class="pull-left">
+                            Publikacja ogłoszenia ({{ payment.days }} dni)
                         </div>
-                        <div class="col-xs-6 text-right">
+                        <div class="pull-right text-right">
                             ${ netPrice } zł
                         </div>
                     </div>
 
-                    <div class="row margin-xs-top margin-xs-bottom">
-                        <div class="col-xs-6">
-                            VAT (${ percentageVatRate }%)
+                    <div class="margin-xs-top margin-xs-bottom clearfix" v-if="coupon.amount > 0">
+                        <div class="pull-left">
+                            Rabat
                         </div>
-                        <div class="col-xs-6 text-right">
-                            ${ vatPrice } zł
+                        <div class="pull-right text-right">
+                            ${ coupon.amount } zł
                         </div>
                     </div>
 
-                    <div class="row margin-xs-top margin-xs-bottom">
-                        <div class="col-xs-6">
+                    {#<div class="margin-xs-top margin-xs-bottom clearfix">#}
+                        {#<div class="pull-left">#}
+                            {#VAT (${ percentageVatRate }%)#}
+                        {#</div>#}
+                        {#<div class="pull-right">#}
+                            {#${ vatPrice } zł#}
+                        {#</div>#}
+                    {#</div>#}
+
+                    <hr>
+
+                    <div class="clearfix">
+                        <div class="pull-left">
                             <strong>Suma:</strong>
                         </div>
-                        <div class="col-xs-6 text-right">
+                        <div class="pull-right">
                             <strong>${ grossPrice } zł</strong>
                         </div>
                     </div>
+
+                    ${ coupon.shown }
+
+                    <hr>
+
+                    <div v-show="!coupon.code && show_coupon === false">
+                        <span class="fa-stack">
+                            <i class="fa fa-circle-o fa-stack-2x"></i>
+                            <i class="fa fa-dollar fa-stack-1x"></i>
+                        </span>
+
+                        <a @click="show_coupon = true;" style="text-decoration: underline; font-size: 14px; cursor: pointer">Masz kupon rabatowy?</a>
+                    </div>
+
+                    {{ form_row(form.coupon) }}
                 </div>
 
                 <div class="panel-footer">
-                    <div class="row">
-                        <div class="col-xs-8">
+                    <div class="clearfix">
+                        <div class="pull-left">
                             <span>Do zapłaty:</span>
                         </div>
-                        <div class="col-xs-4 text-right">
+                        <div class="pull-right">
                             <span>${ grossPrice } zł</span>
                         </div>
                     </div>
@@ -169,8 +251,6 @@
             </div>
         </aside>
 
-        <input type="hidden" name="payment_method_nonce" :value="form.payment_method_nonce">
-
         {{ form_end() }}
     </div>
 {% endblock %}
@@ -178,26 +258,52 @@
 {% block body %}
     {{ parent() }}
 
-    <script src="//js.braintreegateway.com/v2/braintree.js"></script>
-
     <script>
         var data = {
             countries: {{ countries|json_encode|raw }},
             calculator: {{ calculator|json_encode|raw }},
             vat_rates: {{ vat_rates|json_encode|raw }},
             default_vat_rate: {{ default_vat_rate }},
-            client_token: '{{ client_token }}',
+            show_coupon: false,
+            coupon: {{ coupon|json_encode|raw }},
             form: {
-                payment_method_nonce: '',
                 number: '{{ form.number.value }}',
                 name: '{{ form.name.value }}',
                 expiration_year: '{{ form.exp_year.value }}',
                 expiration_month: '{{ form.exp_month.value }}',
-                cvc: '{{ form.cvc.value }}'
-            }
+                cvc: '{{ form.cvc.value }}',
+                payment_method: '{{ form.payment_method.value }}',
+                invoice: {
+                    vat_id: '{{ form.invoice.get('vat_id').value }}',
+                    country_id: '{{ form.invoice.get('country_id').value }}',
+                }
+            },
+            banks: [
+                {id: 25, _class: 'mtransfer'},
+                {id: 31, _class: 'ipko'},
+                {id: 20, _class: 'wbk'},
+                {id: 65, _class: 'pekao'},
+                {id: 85, _class: 'millenium'},
+                {id: 88, _class: 'alior'},
+                {id: 26, _class: 'inteligo'},
+                {id: 45, _class: 'credit-agricole'},
+                {id: 121, _class: 't-mobile'},
+                {id: 110, _class: 'deutsche-bank'},
+                {id: 94, _class: 'eurobank'},
+                {id: 119, _class: 'citi'},
+                {id: 153, _class: 'getin'},
+                {id: 33, _class: 'bgz'},
+                {id: 48, _class: 'bos'},
+                {id: 102, _class: 'r-przelew'},
+                {id: 141, _class: 'pocztowy-24'},
+                {id: 143, _class: 'bps'},
+                {id: 69, _class: 'volkswagen-bank'},
+                {id: 158, _class: 'noble'},
+                {id: 131, _class: 'plus'},
+                {id: 112, _class: 'ing'}
+            ]
         };
     </script>
 
-    <script src="//cdnjs.cloudflare.com/ajax/libs/vue/2.1.10/vue.min.js"></script>
-    <script src="//cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.10/jquery.mask.js"></script>
+    {{ widgets.vue() }}
 {% endblock %}

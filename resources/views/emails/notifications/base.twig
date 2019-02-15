@@ -1,0 +1,13 @@
+{% extends 'emails.layout' %}
+
+{% block footer %}
+    {% if url %}
+        <br>
+        Kliknij, aby zobaczyć: {{ link_to(url) }}
+    {% endif %}
+
+    <br><br>
+    <b>Prosimy nie odpowiadać na tego e-maila. Jest on generowany automatycznie.</b>
+
+    {{ parent() }}
+{% endblock %}

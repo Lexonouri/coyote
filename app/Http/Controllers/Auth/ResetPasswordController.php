@@ -3,6 +3,8 @@
 namespace Coyote\Http\Controllers\Auth;
 
 use Coyote\Http\Controllers\Controller;
+use Coyote\Services\Stream\Activities\ResetPassword;
+use Coyote\Services\Stream\Actor;
 use Illuminate\Http\Request;
 use Illuminate\Foundation\Auth\ResetsPasswords;
 
@@ -70,12 +72,14 @@ class ResetPasswordController extends Controller
     /**
      * Get the response for a successful password reset.
      *
+     * @param  \Illuminate\Http\Request  $request
      * @param  string  $response
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\RedirectResponse|\Illuminate\Http\JsonResponse
      */
-    protected function sendResetResponse($response)
+    protected function sendResetResponse(Request $request, $response)
     {
-        return redirect($this->redirectPath())
-            ->with('success', trans($response));
+        stream((new ResetPassword(new Actor()))->setEmail($this->request->input('email')));
+
+        return redirect($this->redirectPath())->with('success', trans($response));
     }
 }

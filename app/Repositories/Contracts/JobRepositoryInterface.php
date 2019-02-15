@@ -2,6 +2,8 @@
 
 namespace Coyote\Repositories\Contracts;
 
+use Coyote\Job\Comment;
+
 /**
  * @method mixed search(\Coyote\Services\Elasticsearch\QueryBuilderInterface $queryBuilder)
  * @method $this withTrashed()
@@ -66,13 +68,28 @@ interface JobRepositoryInterface extends RepositoryInterface
     public function getMyOffers($userId);
 
     /**
-     * @return \Coyote\Job[]
-     */
-    public function getExpiredOffers();
-
-    /**
      * @param array $tags
      * @return array
      */
     public function getTagSuggestions(array $tags): array;
+
+    /**
+     * @param int $userId
+     * @param string $key
+     * @param string $value
+     * @return void
+     */
+    public function setDraft(int $userId, string $key, string $value): void;
+
+    /**
+     * @param int $userId
+     * @param string $key
+     * @return string|null
+     */
+    public function getDraft(int $userId, string $key): ?string;
+
+    /**
+     * @param int $userId
+     */
+    public function forgetDraft(int $userId): void;
 }

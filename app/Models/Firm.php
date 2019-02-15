@@ -2,9 +2,11 @@
 
 namespace Coyote;
 
+use Coyote\Firm\Gallery;
 use Coyote\Services\Eloquent\HasMany;
 use Coyote\Services\Media\Factory as MediaFactory;
 use Coyote\Services\Media\Logo;
+use Coyote\Services\Media\SerializeClass;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -20,12 +22,15 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $postcode
  * @property string $website
  * @property string $description
+ * @property string $vat_id
  * @property \Coyote\Firm\Benefit[] $benefits
+ * @property \Coyote\Firm\Industry[] $industries
+ * @property \Coyote\Firm\Gallery[] $gallery
  * @property Logo $logo
  */
 class Firm extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, SerializeClass;
 
     /**
      * The attributes that are mass assignable.
@@ -48,7 +53,8 @@ class Firm extends Model
         'postcode',
         'latitude',
         'longitude',
-        'is_private'
+        'is_private',
+        'youtube_url'
     ];
 
     /**
@@ -77,7 +83,7 @@ class Firm extends Model
         parent::boot();
 
         static::saving(function ($model) {
-            foreach (['latitude', 'longitude', 'founded', 'employees', 'headline', 'description', 'latitude', 'longitude', 'country_id', 'street', 'city', 'house', 'postcode'] as $column) {
+            foreach (['latitude', 'longitude', 'founded', 'employees', 'headline', 'description', 'latitude', 'longitude', 'country_id', 'street', 'city', 'house', 'postcode', 'youtube_url'] as $column) {
                 if (empty($model->{$column})) {
                     $model->{$column} = null;
                 }
@@ -130,6 +136,32 @@ class Firm extends Model
     }
 
     /**
+     * @return HasMany
+     */
+    public function gallery()
+    {
+        $instance = new Firm\Gallery();
+
+        return new HasMany($instance->newQuery(), $this, $instance->getTable() . '.' . $this->getForeignKey(), $this->getKeyName());
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function photos()
+    {
+        return $this->hasMany(Gallery::class);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
+    public function industries()
+    {
+        return $this->belongsToMany(Industry::class, 'firm_industries');
+    }
+
+    /**
      * @param string $name
      */
     public function setNameAttribute($name)
@@ -137,6 +169,7 @@ class Firm extends Model
         $name = trim($name);
 
         $this->attributes['name'] = $name;
+        $this->attributes['slug'] = str_slug($name, '_');
     }
 
     /**
@@ -177,24 +210,5 @@ class Firm extends Model
         if (empty($this->user_id)) {
             $this->user_id = $userId;
         }
-    }
-
-    public function __sleep()
-    {
-        if ($this->logo instanceof Logo) {
-            $this->attributes['logo'] = $this->logo->getFilename();
-        }
-
-        $properties = (new \ReflectionClass($this))->getProperties();
-
-        $result = [];
-
-        foreach ($properties as $property) {
-            if (!$property->isStatic()) {
-                $result[] = $property->getName();
-            }
-        }
-
-        return $result;
     }
 }

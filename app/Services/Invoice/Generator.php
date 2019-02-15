@@ -36,7 +36,7 @@ class Generator
 
         $invoice->items()->create([
             'description'   => $this->getDescription($payment),
-            'price'         => $payment->plan->price * $payment->days,
+            'price'         => $calculator->netPrice(),
             'vat_rate'      => $calculator->vatRate
         ]);
 
@@ -49,6 +49,6 @@ class Generator
      */
     private function getDescription(Payment $payment): string
     {
-        return sprintf('%s (%d dni)', $payment->plan->name, $payment->days);
+        return sprintf('Ogłoszenie %s w serwisie %s (%d dni)', $payment->plan->name, config('app.name'), $payment->days);
     }
 }

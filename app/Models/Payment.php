@@ -17,6 +17,9 @@ use Ramsey\Uuid;
  * @property Job $job
  * @property Plan $plan
  * @property Invoice $invoice
+ * @property int $coupon_id
+ * @property Coupon $coupon
+ * @property string $session_id
  */
 class Payment extends Model
 {
@@ -91,50 +94,26 @@ class Payment extends Model
     }
 
     /**
-     * @return float
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
-    public function netPrice()
+    public function coupon()
     {
-        return $this->plan->price * $this->days;
+        return $this->belongsTo(Coupon::class);
     }
 
     /**
-     * @return float
+     * @return string
      */
-    public function grossPrice()
+    public function sign()
     {
-        return $this->netPrice() * $this->plan->vat_rate;
-    }
+        $crc = [
+            $this->session_id,
+            config('services.p24.client_id'),
+            (int) round($this->invoice->grossPrice() * 100),
+            'PLN',
+            config('services.p24.salt')
+        ];
 
-    /**
-     * @return float
-     */
-    public function vat()
-    {
-        return $this->grossPrice() - $this->netPrice();
-    }
-
-    /**
-     * @return float
-     */
-    public function getNetPriceAttribute()
-    {
-        return $this->netPrice();
-    }
-
-    /**
-     * @return float
-     */
-    public function getGrossPriceAttribute()
-    {
-        return $this->grossPrice();
-    }
-
-    /**
-     * @return float
-     */
-    public function getVatAttribute()
-    {
-        return $this->vat();
+        return md5(join('|', $crc));
     }
 }

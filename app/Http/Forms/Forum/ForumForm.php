@@ -37,6 +37,10 @@ class ForumForm extends Form
                 'label' => 'Nazwa',
                 'rules' => 'required|string|max:50'
             ])
+            ->add('title', 'text', [
+                'label' => 'Rozszerzony tytuł',
+                'rules' => 'string|max:200'
+            ])
             ->add('slug', 'text', [
                 'label' => 'Ścieżka',
                 'rules' => 'required|string|max:50'
@@ -89,7 +93,16 @@ class ForumForm extends Form
      */
     private function getParentList()
     {
-        return $this->forum->whereNull('parent_id')->orderBy('order')->pluck('name', 'id')->toArray();
+        return $this
+            ->forum
+            ->whereNull('parent_id')
+            ->orderBy('order')
+            ->get()
+            ->filter(function ($item) {
+                return $item->id !== $this->data->id;
+            })
+            ->pluck('name', 'id')
+            ->toArray();
     }
 
     /**

@@ -22,25 +22,25 @@ class UserRepository extends Repository implements UserRepositoryInterface
      */
     public function lookupName($name, $userIds = [])
     {
-        $sql = $this->model->select(['id', 'name', 'photo'])->where('name', 'ILIKE', $name . '%');
+        $sql = $this
+            ->model
+            ->select(['users.id', 'users.name', 'photo', 'groups.name AS group'])
+            ->whereRaw('LOWER(users.name) LIKE ?', [mb_strtolower($name . '%')])
+            ->where('is_active', 1)
+            ->where('is_blocked', 0)
+            ->leftJoin('groups', 'groups.id', '=', 'group_id');
 
         if (!empty($userIds)) {
-            $values = [];
-
-            foreach ($userIds as $index => $userId) {
-                $values[] = "($userId,$index)";
-            }
-
             $sql->leftJoin(
-                $this->raw('(VALUES ' . implode(',', $values) . ') AS x (user_id, ordering)'),
-                'users.id',
+                $this->raw('(VALUES (' . implode(',', $userIds) . ')) AS x (user_id)'),
+                'x.user_id',
                 '=',
-                'x.user_id'
+                'users.id'
             )
-            ->orderBy($this->raw('CASE WHEN x.ordering IS NULL THEN 0 ELSE x.ordering END'), 'DESC');
+            ->orderBy($this->raw('CASE WHEN x.user_id IS NULL THEN 0 ELSE 1 END'), 'DESC');
         }
 
-        return $sql->orderByRaw('visited_at DESC NULLS LAST')->limit(5)->get();
+        return $sql->orderBy('reputation', 'DESC')->orderByRaw('visited_at DESC NULLS LAST')->limit(5)->get();
     }
 
     /**

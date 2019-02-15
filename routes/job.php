@@ -6,7 +6,6 @@
 /** @var $this \Illuminate\Routing\Router */
 $this->group(['namespace' => 'Job', 'prefix' => 'Praca', 'as' => 'job.'], function () {
     $this->get('/', ['uses' => 'HomeController@index', 'as' => 'home', 'middleware' => 'job.redirect']);
-    $this->get('My', ['uses' => 'MyOffersController@index', 'as' => 'my', 'middleware' => 'auth']);
 
     $this->get('Submit/{id?}', ['uses' => 'SubmitController@getIndex', 'as' => 'submit', 'middleware' => 'auth']);
     $this->post('Submit', ['uses' => 'SubmitController@postIndex', 'middleware' => 'auth']);
@@ -33,8 +32,9 @@ $this->group(['namespace' => 'Job', 'prefix' => 'Praca', 'as' => 'job.'], functi
     $this->get('Zdalna', ['uses' => 'HomeController@remote', 'as' => 'remote', 'middleware' => 'job.redirect']);
     $this->get('Miasto/{name}', ['uses' => 'HomeController@city', 'as' => 'city', 'middleware' => 'job.redirect']);
     $this->get('Firma/{name}', ['uses' => 'HomeController@firm', 'as' => 'firm', 'middleware' => 'job.redirect']);
+    $this->get('My', ['uses' => 'HomeController@my', 'as' => 'my', 'middleware' => 'auth']);
 
-    $this->get('{job}-{slug}', ['uses' => 'OfferController@index', 'as' => 'offer']);
+    $this->get('{job}-{slug}', ['uses' => 'OfferController@index', 'as' => 'offer', 'middleware' => 'page.hit']);
 
     $this->post('Subscribe/{job}', [
         'uses' => 'SubscribeController@index',
@@ -50,12 +50,22 @@ $this->group(['namespace' => 'Job', 'prefix' => 'Praca', 'as' => 'job.'], functi
     $this->post('Application/{job}', ['uses' => 'ApplicationController@save', 'as' => 'application']);
     $this->post('Upload', ['uses' => 'ApplicationController@upload', 'as' => 'application.upload']);
 
+    // Refer friend
+    // ------------------------------------------------------------------------------
+    $this->get('Refer/{job}', ['uses' => 'ReferController@index', 'as' => 'refer']);
+    $this->post('Refer/{job}', ['uses' => 'ReferController@save']);
+
     // move job offer
     $this->get('Move/{job}', ['uses' => 'MoveController@index', 'as' => 'move', 'middleware' => 'can:job-delete']);
     $this->post('Move/{job}', ['uses' => 'MoveController@move', 'middleware' => 'can:job-delete']);
 
     // Payment routes
     // -----------------------------
+    $this->any('Payment/Status', [
+        'uses' => 'PaymentController@paymentStatus',
+        'as' => 'payment.status'
+    ]);
+
     $this->get('Payment/{payment}', [
         'uses' => 'PaymentController@index',
         'as' => 'payment',
@@ -64,17 +74,26 @@ $this->group(['namespace' => 'Job', 'prefix' => 'Praca', 'as' => 'job.'], functi
 
     $this->post('Payment/{payment}', ['uses' => 'PaymentController@process', 'middleware' => 'auth']);
 
-    $this->post('Payment/{payment}/Callback', [
-        'uses' => 'PaymentController@callback',
-        'as' => 'payment.callback',
-        'middleware' => 'auth'
+    $this->get('Payment/{payment}/Success', [
+        'uses' => 'PaymentController@success',
+        'as' => 'payment.success'
     ]);
+
+    $this->get('Coupon/Validate', ['uses' => 'CouponController@validateCode', 'as' => 'coupon']);
+    $this->get('Renew/{job}', ['uses' => 'RenewController@index', 'as' => 'renew']);
+
+    $this->get('Oferta', ['uses' => 'BusinessController@show', 'as' => 'business']);
+    $this->post('Comment/{job}/{id?}', ['uses' => 'CommentController@save', 'as' => 'comment']);
+    $this->delete('Comment/{job}/{id}', ['uses' => 'CommentController@delete', 'as' => 'comment.delete']);
 
     // Job's ads
     // --------------------------------------------------------------
     $this->get('recommendations', ['uses' => 'AdController@index', 'as' => 'ad']);
+    $this->get('fb', ['uses' => 'FbController@showByCategory']);
+    $this->get('fb_keyword', ['uses' => 'FbController@showByKeyword']);
 });
 
 $this->group(['namespace' => 'Firm', 'prefix' => 'Firma', 'as' => 'firm.'], function () {
     $this->post('Logo', ['uses' => 'SubmitController@logo', 'as' => 'logo']);
+    $this->post('Gallery', ['uses' => 'GalleryController@upload', 'as' => 'gallery']);
 });

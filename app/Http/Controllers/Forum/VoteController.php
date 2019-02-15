@@ -2,6 +2,7 @@
 
 namespace Coyote\Http\Controllers\Forum;
 
+use Coyote\Notifications\Post\VotedNotification;
 use Coyote\Services\Stream\Activities\Vote as Stream_Vote;
 use Coyote\Services\Stream\Objects\Topic as Stream_Topic;
 use Coyote\Services\Stream\Objects\Post as Stream_Post;
@@ -16,21 +17,21 @@ class VoteController extends BaseController
     public function index($post)
     {
         if (auth()->guest()) {
-            return response()->json(['error' => 'Musisz być zalogowany, aby oddać ten głos.'], 500);
+            return response()->json(['error' => 'Musisz być zalogowany, aby oddać ten głos.'], 401);
         }
 
         if (!config('app.debug') && auth()->user()->id === $post->user_id) {
-            return response()->json(['error' => 'Nie możesz głosować na wpisy swojego autorstwa.'], 500);
+            return response()->json(['error' => 'Nie możesz głosować na wpisy swojego autorstwa.'], 401);
         }
 
         $topic = $post->topic;
-        if ($topic->is_locked) {
-            return response()->json(['error' => 'Wątek jest zablokowany.'], 500);
+        if ($this->auth->cannot('write', $topic)) {
+            return response()->json(['error' => 'Wątek jest zablokowany.'], 403);
         }
 
         $forum = $topic->forum;
-        if ($forum->is_locked) {
-            return response()->json(['error' => 'Forum jest zablokowane.'], 500);
+        if ($this->auth->cannot('write', $forum)) {
+            return response()->json(['error' => 'Forum jest zablokowane.'], 403);
         }
 
         $this->transaction(function () use ($post, $topic, $forum) {
@@ -50,16 +51,10 @@ class VoteController extends BaseController
                 ]);
                 $post->score++;
 
-                // send notification to the user
-                app('alert.post.vote')
-                    ->setPostId($post->id)
-                    ->setUsersId($forum->onlyUsersWithAccess([$post->user_id]))
-                    ->setSubject(str_limit($topic->subject, 84))
-                    ->setExcerpt($excerpt)
-                    ->setSenderId($this->userId)
-                    ->setSenderName($this->auth->name)
-                    ->setUrl($url)
-                    ->notify();
+                if ($post->user_id !== null) {
+                    // send notification to the user
+                    $post->user->notify(new VotedNotification($this->auth, $post));
+                }
             }
 
             // increase/decrease reputation points according to the forum settings
@@ -67,7 +62,7 @@ class VoteController extends BaseController
                 // add or subtract reputation points
                 app('reputation.post.vote')
                     ->setUserId($post->user_id)
-                    ->setPositive(!count($vote))
+                    ->setPositive($vote === null)
                     ->setUrl($url)
                     ->setPostId($post->id)
                     ->setExcerpt($excerpt)

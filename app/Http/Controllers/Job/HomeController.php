@@ -3,8 +3,11 @@
 namespace Coyote\Http\Controllers\Job;
 
 use Coyote\Job\Preferences;
+use Coyote\Repositories\Contracts\TagRepositoryInterface as TagRepository;
+use Coyote\Repositories\Criteria\Tag\ForCategory;
 use Coyote\Services\Elasticsearch\Builders\Job\SearchBuilder;
 use Coyote\Repositories\Contracts\JobRepositoryInterface as JobRepository;
+use Coyote\Tag;
 use Illuminate\Http\Request;
 use Coyote\Job;
 use Coyote\Currency;
@@ -18,13 +21,18 @@ class HomeController extends BaseController
     private $preferences = [];
 
     /**
-     * @param JobRepository $job
+     * @var TagRepository
      */
-    public function __construct(JobRepository $job)
+    private $tag;
+
+    /**
+     * @param JobRepository $job
+     * @param TagRepository $tag
+     */
+    public function __construct(JobRepository $job, TagRepository $tag)
     {
         parent::__construct($job);
-
-        $this->middleware('geocode');
+        $this->tag = $tag;
 
         $this->middleware(function (Request $request, $next) {
             $this->builder = new SearchBuilder($request);
@@ -38,34 +46,6 @@ class HomeController extends BaseController
      */
     public function index()
     {
-        $this->preferences = new Preferences($this->getSetting('job.preferences'));
-
-        $this->tab = $this->request->get('tab', $this->getSetting('job.tab', self::TAB_FILTERED));
-        $validator = $this->getValidationFactory()->make(
-            $this->request->all(),
-            ['tab' => 'sometimes|in:' . self::TAB_ALL . ',' . self::TAB_FILTERED]
-        );
-
-        if ($validator->fails()) {
-            $this->tab = self::TAB_FILTERED;
-        }
-
-        if ($this->request->has('tab')) {
-            $this->setSetting('job.tab', $this->tab);
-        }
-
-        // if user want to filter job offers, we MUST select "all" tab
-        if (!empty(array_intersect(['q', 'city', 'remote', 'tag'], array_keys($this->request->input())))) {
-            $this->tab = self::TAB_ALL;
-        }
-
-        if ($this->tab == self::TAB_FILTERED) {
-            $this->builder->setPreferences($this->preferences);
-        }
-
-        $this->builder->boostLocation($this->request->attributes->get('geocode'));
-        $this->request->session()->put('current_url', $this->request->fullUrl());
-
         return $this->load();
     }
 
@@ -92,14 +72,14 @@ class HomeController extends BaseController
     }
 
     /**
-     * @param $name
+     * @param $slug
      * @return \Illuminate\View\View
      */
-    public function firm($name)
+    public function firm($slug)
     {
-        $this->builder->addFirmFilter($name);
+        $this->builder->addFirmFilter($slug);
 
-        return $this->load();
+        return $this->load(['firm' => $slug]);
     }
 
     /**
@@ -115,15 +95,44 @@ class HomeController extends BaseController
     /**
      * @return \Illuminate\View\View
      */
-    private function load()
+    public function my()
     {
+        $this->builder->addUserFilter($this->userId);
+
+        return $this->load();
+    }
+
+    /**
+     * @param array $data
+     * @return \Illuminate\View\View
+     */
+    private function load(array $data = [])
+    {
+        $this->preferences = new Preferences($this->getSetting('job.preferences'));
+        $this->builder->setPreferences($this->preferences);
+
+        // get only tags belong to specific category
+        $this->tag->pushCriteria(new ForCategory(Tag\Category::LANGUAGE));
+
+        // only tags with logo
+        $tags = $this->tag->all()->filter(function (Tag $tag) {
+            return $tag->logo->getFilename() !== null;
+        });
+
+        $this->builder->setLanguages($tags->pluck('name')->toArray());
+
+        $this->builder->boostLocation($this->request->attributes->get('geocode'));
+        $this->request->session()->put('current_url', $this->request->fullUrl());
+
+        $this->builder->setSort($this->request->input('sort', $this->request->filled('q') ? '_score' : $this->builder::DEFAULT_SORT));
+
         $result = $this->job->search($this->builder);
 
         // keep in mind that we return data by calling getSource(). This is important because
         // we want to pass collection to the twig (not raw php array)
         $listing = $result->getSource();
 
-        $context = !$this->request->has('q') ? 'global.' : '';
+        $context = !$this->request->filled('q') ? 'global.' : '';
         $aggregations = [
             'cities'        => $result->getAggregationCount("${context}locations.locations_city_original"),
             'tags'          => $result->getAggregationCount("${context}tags"),
@@ -146,16 +155,13 @@ class HomeController extends BaseController
             $subscribes = $this->job->subscribes($this->userId);
         }
 
-        $selected = [];
-        if ($this->tab !== self::TAB_FILTERED) {
-            $selected = [
-                'tags'          => $this->builder->tag->getTags(),
-                'cities'        => array_map('mb_strtolower', $this->builder->city->getCities()),
-                'remote'        => $this->request->has('remote') || $this->request->route()->getName() === 'job.remote'
-            ];
-        }
+        $selected = [
+            'tags'          => $this->builder->tag->getTags(),
+            'cities'        => array_map('mb_strtolower', $this->builder->city->getCities()),
+            'remote'        => $this->request->filled('remote') || $this->request->route()->getName() === 'job.remote'
+        ];
 
-        return $this->view('job.home', [
+        return $this->view('job.home', array_merge($data, [
             'rates_list'        => Job::getRatesList(),
             'employment_list'   => Job::getEmploymentList(),
             'currency_list'     => Currency::getCurrenciesList(),
@@ -165,7 +171,9 @@ class HomeController extends BaseController
             'aggregations'      => $aggregations,
             'pagination'        => $pagination,
             'subscribes'        => $subscribes,
-            'selected'          => $selected
-        ]);
+            'selected'          => $selected,
+            'sort'              => $this->builder->getSort(),
+            'tags'              => $tags->keyBy('name')
+        ]));
     }
 }

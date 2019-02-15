@@ -11,6 +11,7 @@ use Coyote\Repositories\Contracts\MicroblogRepositoryInterface;
 use Coyote\Repositories\Contracts\PastebinRepositoryInterface;
 use Coyote\Repositories\Contracts\PaymentRepositoryInterface;
 use Coyote\Repositories\Contracts\PostRepositoryInterface;
+use Coyote\Repositories\Contracts\TagRepositoryInterface;
 use Coyote\Repositories\Contracts\TopicRepositoryInterface;
 use Coyote\Repositories\Contracts\UserRepositoryInterface;
 use Coyote\Repositories\Contracts\WikiRepositoryInterface;
@@ -54,7 +55,7 @@ class RouteServiceProvider extends ServiceProvider
         $this->router->pattern('payment', '[0-9a-z\-]+');
 
         $this->router->pattern('forum', '[A-Za-ząęśćłźżóń\-\_\/\.\+]+');
-        $this->router->pattern('tag', '([a-ząęśżźćółń0-9\-\.\#\+])+');
+        $this->router->pattern('tag_name', '([a-ząęśżźćółń0-9\-\.\#\+])+');
         $this->router->pattern('slug', '.*');
         $this->router->pattern('path', '.*'); // being used on wiki routes
         $this->router->pattern('tab', 'Reputation|Post|Microblog'); // user's profile tabs
@@ -71,6 +72,7 @@ class RouteServiceProvider extends ServiceProvider
         $this->router->model('block', BlockRepositoryInterface::class);
         $this->router->model('job', JobRepositoryInterface::class);
         $this->router->model('payment', PaymentRepositoryInterface::class);
+        $this->router->model('tag', TagRepositoryInterface::class);
 
         $this->router->bind('forum', function ($slug) {
             return $this->app->make(ForumRepositoryInterface::class, [$this->app])->where('slug', $slug)->firstOrFail();
@@ -98,8 +100,8 @@ class RouteServiceProvider extends ServiceProvider
      */
     public function map()
     {
-        $this->mapWebRoutes();
         $this->mapApiRoutes();
+        $this->mapWebRoutes();
     }
 
     /**
@@ -136,6 +138,10 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected function mapApiRoutes()
     {
-        //
+        $this->router->group([
+            'namespace' => $this->namespace, 'middleware' => 'api',
+        ], function () {
+            require base_path('routes/api.php');
+        });
     }
 }

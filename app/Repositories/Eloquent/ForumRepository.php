@@ -34,18 +34,13 @@ class ForumRepository extends Repository implements ForumRepositoryInterface
      */
     public function model()
     {
-        return 'Coyote\Forum';
+        return Forum::class;
     }
 
     /**
-     * Gets forum categories. You need to pass either $userId or $guestId (for anonymous users)
-     *
-     * @param int $userId
-     * @param string $guestId
-     * @param null|int $parentId
-     * @return mixed
+     * @inheritdoc
      */
-    public function categories($userId, $guestId, $parentId = null)
+    public function categories($guestId, $parentId = null)
     {
         $this->applyCriteria();
 
@@ -67,8 +62,8 @@ class ForumRepository extends Repository implements ForumRepositoryInterface
             ->leftJoin('posts', 'posts.id', '=', 'forums.last_post_id')
             ->leftJoin('users', 'users.id', '=', 'posts.user_id')
             ->leftJoin('topics', 'topics.id', '=', 'posts.topic_id')
-            ->trackForum($userId, $guestId)
-            ->trackTopic($userId, $guestId)
+            ->trackForum($guestId)
+            ->trackTopic($guestId)
             ->when($parentId, function (Builder $builder) use ($parentId) {
                 return $builder->where('parent_id', $parentId);
             })
@@ -106,16 +101,6 @@ class ForumRepository extends Repository implements ForumRepositoryInterface
         $this->resetModel();
 
         return $parents;
-    }
-
-    /**
-     * Get restricted access forums.
-     *
-     * @return int[]
-     */
-    public function getRestricted()
-    {
-        return (new Forum\Access)->groupBy('forum_id')->get(['forum_id'])->pluck('forum_id')->toArray();
     }
 
     /**
@@ -220,13 +205,12 @@ class ForumRepository extends Repository implements ForumRepositoryInterface
      * Mark forum as read
      *
      * @param $forumId
-     * @param $userId
-     * @param $sessionId
+     * @param $guestId
      */
-    public function markAsRead($forumId, $userId, $sessionId)
+    public function markAsRead($forumId, $guestId)
     {
         // builds data to update
-        $attributes = ['forum_id' => $forumId] + ($userId ? ['user_id' => $userId] : ['session_id' => $sessionId]);
+        $attributes = ['forum_id' => $forumId, 'guest_id' => $guestId];
         // execute a query...
         Forum_Track::updateOrCreate($attributes, $attributes + ['marked_at' => $this->raw('NOW()'), 'forum_id' => $forumId]);
         $track = new Topic_Track();

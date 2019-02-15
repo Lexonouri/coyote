@@ -2,8 +2,20 @@
 
 namespace Coyote;
 
+use Coyote\Pm\Text;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property string $root_id
+ * @property int $user_id
+ * @property int $author_id
+ * @property int $text_id
+ * @property int $folder
+ * @property Text $text
+ * @property User $author
+ * @property User $user
+ */
 class Pm extends Model
 {
     const INBOX = 1;
@@ -26,8 +38,27 @@ class Pm extends Model
      */
     public $timestamps = false;
 
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
     public function text()
     {
-        return $this->belongsTo('Coyote\Pm\Text');
+        return $this->belongsTo(Text::class);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function author()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

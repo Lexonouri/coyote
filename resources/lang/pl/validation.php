@@ -44,7 +44,7 @@ return [
     'json'                 => 'The :attribute must be a valid JSON string.',
     'max'                  => [
         'numeric' => 'The :attribute may not be greater than :max.',
-        'file'    => 'The :attribute may not be greater than :max kilobytes.',
+        'file'    => 'Plik nie może być większy niż :max kilobajtów.',
         'string'  => 'Maksymalna długość tego pola to :max znaków.',
         'array'   => 'The :attribute may not have more than :max items.',
     ],
@@ -52,14 +52,14 @@ return [
     'min'                  => [
         'numeric' => 'Minimalna wartość dla tego pola to :min.',
         'file'    => 'The :attribute must be at least :min kilobytes.',
-        'string'  => 'The :attribute must be at least :min characters.',
+        'string'  => 'To pole musi mieć :min znaków.',
         'array'   => 'The :attribute must have at least :min items.',
     ],
     'not_in'               => 'The selected :attribute is invalid.',
     'numeric'              => 'The :attribute must be a number.',
     'regex'                => 'The :attribute format is invalid.',
     'required'             => 'Pole :attribute jest wymagane.',
-    'required_if'          => 'The :attribute field is required when :other is :value.',
+    'required_if'          => 'Pole :attribute jest wymagane jeżeli :other to :value.',
     'required_with'        => 'To pole jest wymagane.',
     'required_with_all'    => 'The :attribute field is required when :values is present.',
     'required_without'     => 'The :attribute field is required when :values is not present.',
@@ -75,6 +75,7 @@ return [
     'timezone'             => 'The :attribute must be a valid zone.',
     'unique'               => 'The :attribute has already been taken.',
     'url'                  => 'Pole musi zawierać prawidłowy link.',
+    'uploaded'             => 'Nie można dodać załącznika. Format lub rozmiar pliku jest nieprawidłowy.',
 
     'username'             => 'Nazwa użytkownika może zawierać litery, cyfry oraz znaki ._ -',
     'user_exist'           => 'Użytkownik o podanej nazwie nie istnieje.',
@@ -85,6 +86,8 @@ return [
     'reputation'           => 'Potrzebujesz minimum :point punktów reputacji aby zmienić zawartość tego pola.',
     'spam_link'            => 'Potrzebujesz minimum :point punktów reputacji, aby umieścić link w tym polu.',
     'spam_chinese'         => 'Z powodu spamu, tekst nie może zawierać chińskich znaków.',
+    'spam_foreign'         => 'Musisz napisać min. :posts post, aby umieścić linki w tym polu.',
+    'spam_blacklist'       => 'Musisz się zalogować, aby napisać post z tego hosta.',
     'tag'                  => 'Podany tag zawiera nieprawidłowe znaki.',
     'tag_creation'         => 'Potrzebujesz :point punktów reputacji, aby utworzyć nowy tag. Wybierz już istniejący.',
     'throttle'             => 'Musisz odczekać jeszcze :delay przed dodaniem kolejnego wpisu.',
@@ -97,6 +100,7 @@ return [
     'cc_cvc'               => 'Wprowadzony kod CVC jest nieprawidłowy.',
     'cc_date'              => 'Upłynęła data ważności karty.',
     'recaptcha'            => 'Wartość pola recaptcha jest nieprawidłowa. Prosimy o kontakt.',
+    'host'                 => 'Podany link musi pochodzić z serwera :host.',
 
     /*
     |--------------------------------------------------------------------------
@@ -112,6 +116,9 @@ return [
     'custom' => [
         'name' => [
             'unique'        => 'Konto o tym loginie już istnieje'
+        ],
+        'coupon' => [
+            'exists'        => 'Ten kod promocyjny nie istnieje lub został już wykorzystany.'
         ],
         'email' => [
             'unique'        => 'Ten e-mail jest już przypisany do innego konta',

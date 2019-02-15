@@ -2,49 +2,20 @@
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Third Party Services
-    |--------------------------------------------------------------------------
-    |
-    | This file is for storing the credentials for third party services such
-    | as Stripe, Mailgun, Mandrill, and others. This file provides a sane
-    | default location for this type of information, allowing packages
-    | to have a conventional place to find your various credentials.
-    |
-    */
-
-    'mailgun'  => [
-        'domain' => '',
-        'secret' => '',
-    ],
-    'mandrill' => [
-        'secret' => '',
-    ],
-    'ses'      => [
-        'key'    => '',
-        'secret' => '',
-        'region' => 'us-east-1',
-    ],
-    'stripe'   => [
-        'model'  => 'User',
-        'secret' => '',
-    ],
-
     // WebSocket server for Coyote.
     // ------------------------------------------------------
 
     'ws'        => [
-        'host'   => env('WS_HOST'),
-        'port'   => env('WS_PORT')
+        'host'          => env('WS_HOST'),
+        'port'          => env('WS_PORT')
     ],
 
     // Elasticsearch host and port. In most cases default values will be suitable.
     // ---------------------------------------------------------------------------
 
     'elasticsearch' => [
-        'host'   => env('ELASTICSEARCH_HOST', 'localhost'),
-        'port'   => env('ELASTICSEARCH_PORT', 9200)
+        'host'          => env('ELASTICSEARCH_HOST', 'localhost'),
+        'port'          => env('ELASTICSEARCH_PORT', 9200)
     ],
 
     // OAuth clients.
@@ -68,6 +39,11 @@ return [
         'redirect'      => env('FACEBOOK_REDIRECT'),
     ],
 
+    'mailgun' => [
+        'domain'        => env('MAILGUN_DOMAIN'),
+        'secret'        => env('MAILGUN_SECRET'),
+    ],
+
     // Google maps key to show jobs locations.
     // -----------------------------------------------------------
 
@@ -83,15 +59,26 @@ return [
         'port'          => ''
     ],
 
-    'braintree' => [
-        'env'           => env('BRAINTREE_ENV'),
-        'merchant_id'   => env('BRAINTREE_MERCHANT_ID'),
-        'public_key'    => env('BRAINTREE_PUBLIC_KEY'),
-        'private_key'   => env('BRAINTREE_PRIVATE_KEY')
+    'paylane' => [
+        'username'      => env('PAYLANE_USERNAME'),
+        'password'      => env('PAYLANE_PASSWORD')
+    ],
+
+    'p24' => [
+        'client_id'     => env('P24_CLIENT_ID'),
+        'payment_url'   => env('P24_PAYMENT_URL', 'https://sandbox.przelewy24.pl/trnDirect'),
+        'verify_url'    => env('P24_VERIFY_URL', 'https://sandbox.przelewy24.pl/trnVerify'),
+        'salt'          => env('P24_SALT')
     ],
 
     'recaptcha' => [
         'key'           => env('RECAPTCHA_KEY'),
         'secret'        => env('RECAPTCHA_SECRET')
-    ]
+    ],
+
+    'twilio' => [
+        'account_sid'   => env('TWILIO_ACCOUNT_SID'),
+        'auth_token'    => env('TWILIO_AUTH_TOKEN'),
+        'from'          => env('TWILIO_FROM'), // optional
+    ],
 ];

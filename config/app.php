@@ -21,7 +21,7 @@ return [
     |--------------------------------------------------------------------------
     |
     */
-    'version' => '2.1',
+    'version' => '2.3',
 
     /*
     |--------------------------------------------------------------------------
@@ -47,6 +47,7 @@ return [
     */
 
     'url'             => env('APP_URL', 'http://localhost'),
+    'asset_url'       => env('ASSET_URL', null),
 
     /*
     |--------------------------------------------------------------------------
@@ -97,6 +98,19 @@ return [
     */
 
     'fallback_locale' => 'en',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Faker Locale
+    |--------------------------------------------------------------------------
+    |
+    | This locale will be used by the Faker PHP library when generating fake
+    | data for your database seeds. For example, this will be used to get
+    | localized telephone numbers, street address information and more.
+    |
+    */
+    'faker_locale' => 'pl_PL',
+
     /*
     |--------------------------------------------------------------------------
     | Encryption Key
@@ -109,8 +123,18 @@ return [
     */
 
     'key'             => env('APP_KEY', 'base64:OQUTZfp+RR6GX5fYVUJyASDSAeZPSK3kbEifXRC5CMCY='),
-//    'cipher'          => MCRYPT_RIJNDAEL_128,
     'cipher'          => 'AES-256-CBC',
+
+    /*
+    |--------------------------------------------------------------------------
+    | Disallowed hosts
+    |--------------------------------------------------------------------------
+    |
+    | Hosts used by validator. Users using that hosts can't publish posts without registration.
+    |
+    */
+    'blacklist_host' => ['a2mobile.pl', 'free.aero2.net.pl', 'plus.pl'],
+
     /*
     |--------------------------------------------------------------------------
     | Logging Configuration
@@ -173,7 +197,7 @@ return [
         Barryvdh\Debugbar\ServiceProvider::class,
         // Mozliwosc tworzenia miniaturek zdjec. ten provider umieszczony jest tak wysoko poniewaz
         // jego regula routingu musi byc nadrzedna nad regulami coyote
-        Folklore\Image\ImageServiceProvider::class,
+        Intervention\Image\ImageServiceProvider::class,
 
         /*
          * Application Service Providers...
@@ -192,8 +216,6 @@ return [
         // mikroblogi, czy forum. w takim scenariuszu zaladowane sa odpowiednie klasy
         // do parsowania tekstu w zaleznosci od tego, czy mamy do czynienia z postem, komentarzem itd
         Coyote\Providers\ParserServiceProvider::class,
-        // Klasy powiadomien
-        Coyote\Providers\AlertServiceProvider::class,
         // Klasy obslugi reputacji uzytkownika
         Coyote\Providers\ReputationServiceProvider::class,
         // Obsluga Elasticsearch
@@ -217,8 +239,6 @@ return [
         // Mozliwosc logowania przez github, fb, google...
         Laravel\Socialite\SocialiteServiceProvider::class,
 
-        // Obsluga MongoDB w Laravel
-        Jenssegers\Mongodb\MongodbServiceProvider::class,
         // Pakiet do budowania menu
         Lavary\Menu\ServiceProvider::class,
         // Parsowanie user agent
@@ -227,9 +247,9 @@ return [
         Boduch\Grid\GridServiceProvider::class,
         // sentry, raportowanie bugow
         Sentry\SentryLaravel\SentryLaravelServiceProvider::class,
-        // Fractal
-        Spatie\Fractal\FractalServiceProvider::class,
-        Swap\Laravel\SwapServiceProvider::class
+        Swap\Laravel\SwapServiceProvider::class,
+        // Wyslanie SMS po wyslanej aplikacji na dana oferte pracy
+        NotificationChannels\Twilio\TwilioProvider::class
     ],
     /*
     |--------------------------------------------------------------------------

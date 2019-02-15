@@ -4,13 +4,14 @@ namespace Coyote\Http\Controllers\Auth;
 
 use Coyote\Actkey;
 use Coyote\Http\Factories\MailFactory;
+use Coyote\Http\Requests\ConfirmRequest;
+use Coyote\Mail\EmailConfirmation;
 use Coyote\Repositories\Contracts\UserRepositoryInterface as UserRepository;
 use Coyote\Http\Controllers\Controller;
 use Coyote\Services\Stream\Activities\Confirm as Stream_Confirm;
 use Coyote\Services\Stream\Actor as Stream_Actor;
 use Coyote\Services\Stream\Objects\Person as Stream_Person;
 use Illuminate\Http\Request;
-use Illuminate\Mail\Message;
 
 class ConfirmController extends Controller
 {
@@ -47,28 +48,22 @@ class ConfirmController extends Controller
     }
 
     /**
-     * @param Request $request
+     * @param ConfirmRequest $request
      * @return \Illuminate\Http\RedirectResponse
      */
-    public function generateLink(Request $request)
+    public function generateLink(ConfirmRequest $request)
     {
-        $this->validate($request, [
-            // case sensitive
-            'email' => 'required|email|max:255|exists:users|unique:users,email,NULL,id,is_confirm,1',
-            'name'  => 'sometimes|username|exists:users'
-        ], [
-            'email.unique' => 'Ten adres e-mail jest już zweryfikowany.'
-        ]);
+        $request->validated();
 
         if ($this->userId) {
             // perhaps user decided to change his email, so we need to save new one in database
-            if ($request->email !== $request->user()->email) {
-                $request->user()->fill(['email' => $request->email])->save();
+            if ($request->input('email') !== $this->auth->email) {
+                $this->auth->forceFill(['email' => $request->input('email')])->save();
             }
 
             $userId = $this->userId;
         } else {
-            $result = $this->user->findWhere($request->intersect(['name', 'email']) + ['is_confirm' => 0]);
+            $result = $this->user->findWhere($request->only(['name', 'email']) + ['is_confirm' => 0]);
 
             // taka sytuacja nie bedzie miala miejsce w 99% przypadkow
             // warunek zostanie spelniony tylko wowczas gdy np. 2 lub wiecej uzytkownikow zostalo
@@ -84,12 +79,7 @@ class ConfirmController extends Controller
         }
 
         $url = Actkey::createLink($userId);
-        $email = $request->email;
-
-        $this->getMailFactory()->queue('emails.user.change_email', ['url' => $url], function (Message $message) use ($email) {
-            $message->to($email);
-            $message->subject('Prosimy o potwierdzenie nowego adresu e-mail');
-        });
+        $this->getMailFactory()->to($request->input('email'))->queue(new EmailConfirmation($url));
 
         return back()->with('success', 'Na podany adres e-mail został wysłany link aktywacyjny.');
     }

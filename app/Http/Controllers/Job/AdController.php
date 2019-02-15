@@ -3,11 +3,11 @@
 namespace Coyote\Http\Controllers\Job;
 
 use Coyote\Http\Controllers\Controller;
-use Coyote\Job\Preferences;
 use Coyote\Repositories\Contracts\JobRepositoryInterface as JobRepository;
-use Coyote\Repositories\Contracts\PageRepositoryInterface as PageRepository;
-use Coyote\Repositories\Criteria\Job\PriorDeadline;
+use Coyote\Repositories\Contracts\TagRepositoryInterface as TagRepository;
 use Coyote\Services\Elasticsearch\Builders\Job\AdBuilder;
+use Coyote\Services\Elasticsearch\Raw;
+use Coyote\Services\Skills\Predictions;
 
 class AdController extends Controller
 {
@@ -17,54 +17,39 @@ class AdController extends Controller
     private $job;
 
     /**
-     * @var PageRepository
+     * @var TagRepository
      */
-    private $page;
+    private $tag;
 
     /**
      * @param JobRepository $job
-     * @param PageRepository $page
+     * @param TagRepository $tag
      */
-    public function __construct(JobRepository $job, PageRepository $page)
+    public function __construct(JobRepository $job, TagRepository $tag)
     {
         debugbar()->disable();
         parent::__construct();
 
         $this->job = $job;
-        $this->page = $page;
+        $this->tag = $tag;
 
         $this->middleware('geocode');
     }
 
     /**
+     * @param Predictions $predictions
      * @return string
      */
-    public function index()
+    public function index(Predictions $predictions)
     {
         $builder = new AdBuilder($this->request);
         $builder->boostLocation($this->request->attributes->get('geocode'));
 
         $data = [];
-        $tags = $this->getRefererTags();
+        $tags = $predictions->getTags();
 
         if (!empty($tags)) {
-            $builder->boostTags($tags);
-        } else {
-            $preferences = new Preferences($this->getSetting('job.preferences'));
-            $builder->setPreferences($preferences);
-
-            if ($preferences->isEmpty()) {
-                $location = $this->request->attributes->get('geocode');
-
-                if ($location->isValid()) {
-                    $this->job->pushCriteria(new PriorDeadline());
-
-                    $data = [
-                        'location' => $location,
-                        'offers_count' => $this->job->countCityOffers($location->city)
-                    ];
-                }
-            }
+            $builder->boostTags($this->boost($tags));
         }
 
         $result = $this->job->search($builder);
@@ -73,30 +58,53 @@ class AdController extends Controller
         }
 
         // search jobs that might be interesting for user
-        return (string) view('job.ad', $data, ['jobs' => $result->getSource()]);
+        return (string) view(
+            'job.ad',
+            $data,
+            ['jobs' => $result->getSource(), 'inverse_tags' => $this->getTagsNames($tags), 'major_tag' => $this->getMajorTag($tags)]
+        );
     }
 
     /**
+     * @param \Coyote\Tag[] $tags
      * @return array
      */
-    private function getRefererTags()
+    private function boost($tags)
     {
-        $referer = filter_var($this->request->headers->get('referer'), FILTER_SANITIZE_URL);
-        if (!$referer) {
+        $result = [];
+
+        foreach ($tags as $tag) {
+            if (!empty($tag)) {
+                $result[] = sprintf('%s^%.1F', Raw::escape($tag->name), 1);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param \Coyote\Tag[] $tags
+     * @return array|\Coyote\Tag
+     */
+    private function getMajorTag($tags)
+    {
+        if (empty($tags)) {
             return [];
         }
 
-        $path = parse_url($referer, PHP_URL_PATH);
-        if (!$path) {
+        return $tags->first();
+    }
+
+    /**
+     * @param \Coyote\Tag[] $tags
+     * @return array
+     */
+    private function getTagsNames($tags)
+    {
+        if (empty($tags)) {
             return [];
         }
 
-        $page = $this->page->findByPath($path);
-
-        if (!$page) {
-            return [];
-        }
-
-        return $page->tags;
+        return $tags->pluck('name')->toArray();
     }
 }

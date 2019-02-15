@@ -1,8 +1,13 @@
 import '../../plugins/uploader';
 import initTinymce from '../../libs/tinymce';
-import Tags from '../../libs/tags';
 import Dialog from '../../libs/dialog';
 import Map from '../../libs/map';
+import VueThumbnail from '../../components/thumbnail.vue';
+import VuePricing from '../../components/pricing.vue';
+import VueTagsDropdown from '../../components/tags-dropdown.vue';
+import VueTagsSkill from '../../components/tag-skill.vue';
+import 'chosen-js';
+import 'intl-tel-input';
 
 /**
  * Cast data from bool to int to properly display radio buttons (0 and 1 instade of true and false).
@@ -26,12 +31,15 @@ function toInt(data) {
     return data;
 }
 
-Vue.component('changer', require('../../components/changer.vue'));
+Vue.component('vue-thumbnail', VueThumbnail);
+Vue.component('vue-pricing', VuePricing);
+Vue.component('vue-tags-dropdown', VueTagsDropdown);
+Vue.component('vue-tag-skill', VueTagsSkill);
 
 new Vue({
     el: '.submit-form',
     delimiters: ['${', '}'],
-    data: toInt(data),
+    data: toInt(window.data),
     mounted: function () {
         initTinymce();
 
@@ -50,23 +58,6 @@ new Vue({
             });
         }
 
-        this.tagComponent = new Tags({
-            onSelect: (value) => {
-                this.tags.push({name: value, pivot: {priority: 1}});
-                // fetch only tag name
-                let pluck = this.tags.map(item => item.name);
-
-                // request suggestions
-                $.get($('#tag').data('suggestions-url'), {t: pluck}, result => {
-                    this.suggestions = result;
-                });
-            }
-        });
-
-        $('#tags-container').each(function () {
-            $(this).sortable();
-        });
-
         // ugly hack to initialize jquery fn after dom is loaded
         $(() => {
             $.uploader({
@@ -83,17 +74,38 @@ new Vue({
         });
 
         $('[v-loader]').remove();
+        this._initTooltip();
+
+        $('#industries').chosen({
+            placeholder_text_multiple: 'Wybierz z listy'
+        });
     },
     methods: {
         /**
          * Add tag after clicking on suggestion tag.
          *
-         * @param {String} value
+         * @param {String} name
          */
-        addTag: function (value) {
-            this.tagComponent.addTag(value);
+        addTag: function (name) {
+            this.tags.push({name: name, pivot: {priority: 1}});
+            // fetch only tag name
+            let pluck = this.tags.map(item => item.name);
+
+            // request suggestions
+            $.get(this.suggestionUrl, {t: pluck}, result => {
+                this.suggestions = result;
+            });
+
+            this._initTooltip();
         },
-        removeTag: function (index) {
+        onTagChange: function (name) {
+            this.addTag(name);
+        },
+        onTagDelete: function (name) {
+            let index = this.tags.findIndex(el => {
+                return el.name === name;
+            });
+
             this.tags.splice(index, 1);
         },
         isInvalid: function (fields) {
@@ -167,6 +179,7 @@ new Vue({
 
             // text can not be NULL
             tinymce.get('description').setContent(this.firm.description === null ? '' : this.firm.description);
+            $('#industries').trigger('chosen:updated');
         },
         changeFirm: function () {
             if (!this.firm.name) {
@@ -209,11 +222,16 @@ new Vue({
                 'is_private': +false,
                 'is_agency': +false,
                 'employees': null,
-                'founded': null
+                'founded': null,
+                'vat_id': null,
+                'youtube_url': null,
+                'gallery': [{file: ''}]
             };
 
             this.benefits = [];
             tinymce.get('description').setContent(''); // new firm - empty description
+
+            $('#industries').trigger('chosen:updated');
         },
         changeAddress: function (e) {
             let val = e.target.value.trim();
@@ -237,24 +255,23 @@ new Vue({
             this.map.removeMarker(this.marker);
             this.marker = this.map.addMarker(this.firm.latitude, this.firm.longitude);
         },
-        changePlan: function (value) {
-            this.job.plan_length = value;
+        onThumbnailUploaded: function (file) {
+            this.firm.gallery.splice(this.firm.gallery.length - 1, 0, file);
+        },
+        onThumbnailDeleted: function (file) {
+            let index = this.firm.gallery.findIndex(photo => photo.file === file);
+
+            if (index > -1) {
+                this.firm.gallery.splice(index, 1);
+            }
+        },
+        _initTooltip: function () {
+            this.$nextTick(function () {
+                $('i[data-toggle="tooltip"]').tooltip();
+            });
         }
     },
     computed: {
-        deadlineDate: function () {
-            let value = parseInt(this.job.deadline);
-
-            if (value > 0) {
-                let date = new Date();
-                date.setDate(date.getDate() + value);
-
-                return date.getFullYear() + '-' + (date.getMonth() + 1) + '-' + date.getDate();
-            }
-            else {
-                return '--';
-            }
-        },
         address: function () {
             return String((this.firm.street || '') + ' ' + (this.firm.house || '') + ' ' + (this.firm.postcode || '') +  ' ' + (this.firm.city || '')).trim();
         }
@@ -310,5 +327,26 @@ $(() => {
         $('input[name="done"]').val(1);
     });
 
-    $('i[data-toggle="tooltip"]').tooltip();
+    require.ensure([], require => {
+        require('intl-tel-input/build/js/utils');
+
+        $('input[type="tel"]').intlTelInput({
+            preferredCountries: ['pl'],
+            separateDialCode: true,
+            nationalMode: true,
+            initialCountry: 'auto',
+            geoIpLookup: function (callback) {
+                $.getJSON('//geo-ip.io/1.0/ip/?callback=?', {}, function (json) {
+                    callback(json.country_code.toLowerCase());
+                });
+            },
+        });
+
+        $('.submit-form').submit(function () {
+            let input = $('input[type="tel"]');
+            let number = input.intlTelInput('getNumber');
+
+            input.val(number.length > 3 ? number : null);
+        });
+    });
 });

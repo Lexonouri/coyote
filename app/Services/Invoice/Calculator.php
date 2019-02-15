@@ -2,6 +2,7 @@
 
 namespace Coyote\Services\Invoice;
 
+use Coyote\Coupon;
 use Illuminate\Contracts\Support\Arrayable;
 
 class Calculator implements Arrayable
@@ -19,7 +20,12 @@ class Calculator implements Arrayable
     /**
      * @var float
      */
-    public $quantity;
+    public $discount;
+
+    /**
+     * @var Coupon|null
+     */
+    protected $coupon;
 
     /**
      * @param array $attributes
@@ -36,11 +42,22 @@ class Calculator implements Arrayable
     }
 
     /**
+     * @param Coupon|null $coupon
+     * @return $this
+     */
+    public function setCoupon(Coupon $coupon = null)
+    {
+        $this->coupon = $coupon;
+
+        return $this;
+    }
+
+    /**
      * @return float
      */
     public function netPrice()
     {
-        return round($this->price * $this->quantity, 2);
+        return round($this->calculateDiscount($this->price), 2);
     }
 
     /**
@@ -70,5 +87,14 @@ class Calculator implements Arrayable
             'gross_price'   => $this->grossPrice(),
             'vat_price'     => $this->vatPrice()
         ];
+    }
+
+    /**
+     * @param float $price
+     * @return float
+     */
+    private function calculateDiscount($price)
+    {
+        return max(0, ($this->discount > 0 ? ($price - ($price * $this->discount)) : $price) - ($this->coupon !== null ? $this->coupon->amount : 0));
     }
 }

@@ -2,13 +2,15 @@
 
 namespace Coyote\Job;
 
-use Coyote\Models\Scopes\ForUser;
+use Coyote\Job;
+use Coyote\Models\Scopes\ForGuest;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\Notifiable;
 
 /**
  * @property int $job_id
- * @property int $user_id
- * @property string $session_id
+ * @property Job $job
+ * @property string $guest_id
  * @property string $email
  * @property string $name
  * @property string $phone
@@ -20,7 +22,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Application extends Model
 {
-    use ForUser;
+    use ForGuest, Notifiable;
 
     /**
      * The database table used by the model.
@@ -34,7 +36,7 @@ class Application extends Model
      *
      * @var array
      */
-    protected $fillable = ['job_id', 'user_id', 'session_id', 'email', 'name', 'phone', 'github', 'text', 'salary', 'dismissal_period', 'cv'];
+    protected $fillable = ['job_id', 'guest_id', 'email', 'name', 'phone', 'github', 'text', 'salary', 'dismissal_period', 'cv'];
 
     /**
      * @var bool

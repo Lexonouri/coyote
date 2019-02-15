@@ -21,29 +21,15 @@ class PaymentRepository extends Repository implements PaymentRepositoryInterface
     /**
      * @inheritdoc
      */
-    public function hasRecentlyPaid(int $userId, int $days = 7)
-    {
-        return $this
-            ->model
-            ->join('jobs', function (JoinClause $join) use ($userId) {
-                return $join->on('jobs.id', '=', 'job_id')->on('user_id', $this->raw($userId));
-            })
-            ->where('payments.created_at', '>', Carbon::now()->subDay($days))
-            ->where('status_id', Payment::PAID)
-            ->exists();
-    }
-
-    /**
-     * @inheritdoc
-     */
-    public function ongoingPayments()
+    public function ongoingPaymentsWithBoostBenefit()
     {
         return $this
             ->model
             ->select(['days', 'job_id', 'ends_at'])
             ->where('ends_at', '>', Carbon::now())
             ->with(['job' => function (BelongsTo $builder) {
-                $builder->whereNotNull('deleted_at'); // shouldn't laravel do this for us? anyway, no deleted offers!
+                // shouldn't laravel do this for us? anyway, no deleted offers!
+                return $builder->whereNull('deleted_at')->where('is_boost', true);
             }])
             ->get();
     }
@@ -60,8 +46,12 @@ class PaymentRepository extends Repository implements PaymentRepositoryInterface
                 'payments.created_at',
                 'status_id',
                 'job_id',
-                'invoice_id'
+                'invoice_id',
+                'users.name AS user_name'
             ])
+            ->join('jobs', 'jobs.id', '=', 'job_id')
+            ->join('users', 'users.id', '=', 'jobs.user_id')
+            ->leftJoin('invoices', 'invoices.id', '=', 'invoice_id')
             ->with(['job', 'invoice']);
     }
 }

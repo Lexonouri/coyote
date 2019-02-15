@@ -41,17 +41,16 @@ class ScrollToPost
      */
     public function handle(Request $request, Closure $next)
     {
-        /* @var \Coyote\Forum */
+        /* @var \Coyote\Forum $forum */
         $forum = $request->route('forum');
         /* @var \Coyote\Topic $topic */
         $topic = $request->route('topic');
 
-        $userId = $request->user() ? $request->user()->id : null;
         $guestId = $request->session()->get('guest_id');
 
         $markTime = [
-            Topic::class => $topic->markTime($userId, $guestId),
-            Forum::class => $forum->markTime($userId, $guestId)
+            Topic::class => $topic->markTime($guestId),
+            Forum::class => $forum->markTime($guestId)
         ];
 
         if (empty($markTime[Forum::class])) {

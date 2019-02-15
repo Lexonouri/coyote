@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Coyote\Models\Scopes\TrackForum;
 use Coyote\Models\Scopes\TrackTopic;
 use Coyote\Services\Elasticsearch\CharFilters\TopicFilter;
+use Coyote\Topic\Subscriber;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Coyote\Models\Scopes\Sortable;
@@ -34,6 +35,10 @@ use Illuminate\Database\QueryException;
  * @property \Carbon\Carbon $created_at
  * @property \Carbon\Carbon $updated_at
  * @property Tag[] $tags
+ * @property int $mover_id
+ * @property int $locker_id
+ * @property \Carbon\Carbon $moved_at
+ * @property \Carbon\Carbon $locked_at
  */
 class Topic extends Model
 {
@@ -53,6 +58,14 @@ class Topic extends Model
      * @var string
      */
     protected $dateFormat = 'Y-m-d H:i:se';
+
+    /**
+     * Hide tags from JSON or/and array. Tag contain closure that can't be serialized. We need to serialize post
+     * in PostWasDeleted() class.
+     *
+     * @var array
+     */
+    protected $hidden = ['tags'];
 
     /**
      * Elasticsearch type mapping
@@ -82,7 +95,7 @@ class Topic extends Model
         ],
     ];
 
-    protected $dates = ['created_at', 'updated_at', 'deleted_at', 'last_post_created_at'];
+    protected $dates = ['created_at', 'updated_at', 'deleted_at', 'last_post_created_at', 'moved_at', 'locked_at'];
 
     public static function boot()
     {
@@ -154,7 +167,7 @@ class Topic extends Model
      */
     public function subscribers()
     {
-        return $this->hasMany('Coyote\Topic\Subscriber');
+        return $this->hasMany(Subscriber::class);
     }
 
     /**
@@ -222,6 +235,30 @@ class Topic extends Model
     }
 
     /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function prevForum()
+    {
+        return $this->belongsTo(Forum::class);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function mover()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
+    public function locker()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
      * Subscribe/unsubscribe to topic
      *
      * @param int $userId
@@ -237,26 +274,24 @@ class Topic extends Model
     }
 
     /**
-     * @param integer $userId
-     * @param string $sessionId
+     * @param string $guestId
      * @return mixed
      */
-    public function markTime($userId, $sessionId)
+    public function markTime($guestId)
     {
-        return $this->tracks()->select('marked_at')->where($userId ? 'user_id' : 'session_id', $userId ?: $sessionId)->value('marked_at');
+        return $this->tracks()->select('marked_at')->where('guest_id', $guestId)->value('marked_at');
     }
 
     /**
      * Mark topic as read
      *
-     * @param $markTime
-     * @param integer $userId
-     * @param string $sessionId
+     * @param string $markTime
+     * @param string $guestId
      */
-    public function markAsRead($markTime, $userId, $sessionId)
+    public function markAsRead($markTime, $guestId)
     {
         // builds data to update
-        $attributes = ($userId ? ['user_id' => $userId] : ['session_id' => $sessionId]);
+        $attributes = ['guest_id' => $guestId];
         // execute a query...
 
         try {
@@ -272,11 +307,15 @@ class Topic extends Model
     }
 
     /**
+     * @param int $userId
      * Lock/unlock topic
      */
-    public function lock()
+    public function lock(int $userId)
     {
         $this->is_locked = !$this->is_locked;
+        $this->locked_at = $this->is_locked ? $this->freshTimestamp() : null;
+        $this->locker_id = $this->is_locked ? $userId : null;
+
         $this->save();
     }
 
@@ -318,7 +357,11 @@ class Topic extends Model
         $body = $this->parentGetIndexBody();
 
         // we need to index every field from topics except:
-        $body = array_except($body, ['deleted_at', 'first_post_id', 'last_post_id', 'is_sticky', 'is_announcement', 'poll_id', 'prev_forum_id']);
+        $body = array_except(
+            $body,
+            ['deleted_at', 'first_post_id', 'last_post_id', 'is_sticky', 'is_announcement', 'poll_id', 'prev_forum_id', 'moved_at', 'locked_at', 'moved_by', 'locked_by']
+        );
+
         $posts = [];
 
         foreach ($this->posts()->get(['text']) as $post) {

@@ -2,14 +2,11 @@
 
 namespace Coyote\Http\Forms;
 
-use Coyote\Repositories\Eloquent\UserRepository;
 use Coyote\Services\FormBuilder\Form;
 use Coyote\Services\FormBuilder\ValidatesWhenSubmitted;
 
 class StreamFilterForm extends Form implements ValidatesWhenSubmitted
 {
-    use UsernameTransformerTrait;
-
     /**
      * @var array
      */
@@ -17,54 +14,27 @@ class StreamFilterForm extends Form implements ValidatesWhenSubmitted
         'method' => self::GET
     ];
 
-    /**
-     * @var string
-     */
-    protected $theme = 'forms.themes.filter';
-
-    /**
-     * @var UserRepository
-     */
-    protected $repository;
-
-    /**
-     * @param UserRepository $repository
-     */
-    public function __construct(UserRepository $repository)
-    {
-        parent::__construct();
-
-        $this->repository = $repository;
-        $this->transformUsernameToId('user_name', 'actor_id');
-    }
-
     public function buildForm()
     {
         $this
             ->setAttr(['id' => 'stream-filter-form'])
-            ->add('ip', 'text', [
+            ->add('text', 'search', [
+                'label' => 'Szukana fraza'
+            ])
+            ->add('ip', 'search', [
                 'label' => 'Adres IP'
             ])
-            ->add('browser', 'text', [
-                'label' => 'Przeglądarka',
-                'help' => 'Użyj znaku * aby wyszukiwać po fragmencie tekstu.'
+            ->add('browser', 'search', [
+                'label' => 'Przeglądarka'
             ])
-            ->add('user_name', 'text', [
+            ->add('actor_displayName', 'search', [
                 'label' => 'Użytkownik',
                 'attr' => [
                     'autocomplete' => 'off'
                 ]
             ])
-            ->add('fingerprint', 'text', [
+            ->add('fingerprint', 'search', [
                 'label' => 'Fingerprint'
-            ])
-            ->add('object_objectType', 'choice', [
-                'label' => 'Obiekt',
-                'choices' => array_map('ucfirst', trans()->get('stream.nouns'))
-            ])
-            ->add('object_id', 'text', [
-                'label' => 'ID',
-                'help' => 'ID użytkownika, wątku, postu itd.'
             ])
             ->add('submit', 'submit', [
                 'label' => 'Szukaj',

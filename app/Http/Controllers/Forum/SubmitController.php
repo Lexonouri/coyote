@@ -4,8 +4,14 @@ namespace Coyote\Http\Controllers\Forum;
 
 use Coyote\Http\Controllers\Controller;
 use Coyote\Http\Forms\Forum\SubjectForm;
+use Coyote\Notifications\Post\ChangedNotification;
+use Coyote\Notifications\Post\SubmittedNotification;
+use Coyote\Notifications\Post\UserMentionedNotification;
+use Coyote\Notifications\Topic\SubjectChangedNotification;
 use Coyote\Repositories\Contracts\PollRepositoryInterface;
+use Coyote\Repositories\Contracts\UserRepositoryInterface;
 use Coyote\Services\UrlBuilder\UrlBuilder;
+use Illuminate\Contracts\Notifications\Dispatcher;
 use Illuminate\Http\Request;
 use Coyote\Services\Stream\Activities\Create as Stream_Create;
 use Coyote\Services\Stream\Activities\Update as Stream_Update;
@@ -16,7 +22,6 @@ use Coyote\Services\Stream\Actor as Stream_Actor;
 use Coyote\Services\Parser\Helpers\Login as LoginHelper;
 use Coyote\Events\PostWasSaved;
 use Coyote\Events\TopicWasSaved;
-use Coyote\Services\Alert\Container;
 use Coyote\Post\Log;
 
 class SubmitController extends BaseController
@@ -43,7 +48,7 @@ class SubmitController extends BaseController
 
         if (!empty($post)) {
             // make sure user can edit this post
-            $this->authorize('update', [$post, $forum]);
+            $this->authorize('update', [$post]);
         }
 
         $form = $this->getForm($forum, $topic, $post);
@@ -55,23 +60,26 @@ class SubmitController extends BaseController
     /**
      * Show new post/edit form
      *
+     * @param Dispatcher $dispatcher
      * @param \Coyote\Forum $forum
      * @param \Coyote\Topic $topic
      * @param \Coyote\Post|null $post
      * @return mixed
      */
-    public function save($forum, $topic, $post = null)
+    public function save(Dispatcher $dispatcher, $forum, $topic, $post = null)
     {
         if (is_null($post)) {
             $post = $this->post->makeModel();
+        } else {
+            $this->authorize('update', [$post]);
         }
 
         $form = $this->getForm($forum, $topic, $post);
         $form->validate();
 
-        return $this->transaction(function () use ($form, $forum, $topic, $post) {
-            $request = $form->getRequest();
+        $request = $form->getRequest();
 
+        $post = $this->transaction(function () use ($form, $forum, $topic, $post, $request) {
             $actor = new Stream_Actor($this->auth);
             if (auth()->guest()) {
                 $actor->displayName = $request->get('user_name');
@@ -86,36 +94,6 @@ class SubmitController extends BaseController
             // url to the post
             $url = UrlBuilder::post($post);
 
-            if ($post->wasRecentlyCreated) {
-                $alert = new Container();
-                $notification = [
-                    'sender_id' => $this->userId,
-                    'sender_name' => $request->get('user_name', $this->userId ? $this->auth->name : ''),
-                    'subject' => str_limit($topic->subject, 84),
-                    'excerpt' => excerpt($post->html),
-                    'url' => $url,
-                    'text' => $post->html,
-                    'topic_id' => $topic->id, // used to create unique notification object id
-                    'post_id' => $post->id // used to create unique notification object id
-                ];
-
-                // $subscribersId can be int or array. we need to cast to array type
-                $subscribersId = $forum->onlyUsersWithAccess($topic->subscribers()->pluck('user_id')->toArray());
-                if ($subscribersId) {
-                    $alert->attach(
-                        app('alert.topic.subscriber')->with($notification)->setUsersId($subscribersId)
-                    );
-                }
-
-                // get id of users that were mentioned in the text
-                $subscribersId = $forum->onlyUsersWithAccess((new LoginHelper())->grab($post->html));
-                if ($subscribersId) {
-                    $alert->attach(app('alert.post.login')->with($notification)->setUsersId($subscribersId));
-                }
-
-                $alert->notify();
-            }
-
             if ($topic->wasRecentlyCreated || $post->id === $topic->first_post_id) {
                 $object = (new Stream_Topic)->map($topic, $post->html);
                 $target = (new Stream_Forum)->map($forum);
@@ -126,14 +104,43 @@ class SubmitController extends BaseController
 
             stream($activity, $object, $target);
 
-            // fire the event. it can be used to index a content and/or add page path to "pages" table
-            event(new TopicWasSaved($topic));
-            // add post to elasticsearch
-            event(new PostWasSaved($post));
-
             $request->attributes->set('url', $url);
+
             return $post;
         });
+
+        if ($post->wasRecentlyCreated) {
+            $subscribers = $topic->subscribers()->with('user')->get()->pluck('user')->exceptUser($this->auth);
+
+            $dispatcher->send(
+                $subscribers,
+                (new SubmittedNotification($this->auth, $post))->setSender($request->get('user_name'))
+            );
+
+            // get id of users that were mentioned in the text
+            $usersId = (new LoginHelper())->grab($post->html);
+
+            if (!empty($usersId)) {
+                $dispatcher->send(
+                    app(UserRepositoryInterface::class)->findMany($usersId)->exceptUser($this->auth)->exceptUsers($subscribers),
+                    (new UserMentionedNotification($this->auth, $post))->setSender($request->get('user_name'))
+                );
+            }
+        } else {
+            $subscribers = $post->subscribers()->with('user')->get()->pluck('user')->exceptUser($this->auth);
+
+            $dispatcher->send(
+                $subscribers,
+                new ChangedNotification($this->auth, $post)
+            );
+        }
+
+        // fire the event. it can be used to index a content and/or add page path to "pages" table
+        event(new TopicWasSaved($topic));
+        // add post to elasticsearch
+        event(new PostWasSaved($post));
+
+        return $post;
     }
 
     /**
@@ -145,7 +152,7 @@ class SubmitController extends BaseController
     {
         if ($request->input('poll.remove')) {
             $this->getPollRepository()->delete($pollId);
-        } elseif ($request->has('poll.title')) {
+        } elseif ($request->filled('poll.title')) {
             return $this->getPollRepository()->updateOrCreate($pollId, $request->input('poll'));
         } elseif ($pollId) {
             return $this->getPollRepository()->find($pollId);
@@ -172,6 +179,7 @@ class SubmitController extends BaseController
      */
     public function edit($forum, $topic, $post)
     {
+        $this->authorize('update', [$post]);
         $form = $this->getForm($forum, $topic, $post);
 
         return view('forum.partials.edit')->with('form', $form);
@@ -217,16 +225,11 @@ class SubmitController extends BaseController
                 ])
                 ->save();
 
-                if ($post->user_id) {
-                    app('alert.topic.subject')->with([
-                        'users_id'    => $forum->onlyUsersWithAccess([$post->user_id]),
-                        'sender_id'   => $this->userId,
-                        'sender_name' => $this->auth->name,
-                        'subject'     => str_limit($original['subject'], 84),
-                        'excerpt'     => str_limit($topic->subject, 84),
-                        'url'         => $url,
-                        'topic_id'    => $topic->id
-                    ])->notify();
+                if ($post->user_id !== null) {
+                    $post->user->notify(
+                        (new SubjectChangedNotification($this->auth, $topic))
+                            ->setOriginalSubject(str_limit($original['subject'], 84))
+                    );
                 }
 
                 // fire the event. it can be used to index a content and/or add page path to "pages" table
@@ -277,7 +280,7 @@ class SubmitController extends BaseController
         }
 
         if ($request->input('quote')) {
-            $postsId[] = $request->input('quote');
+            $postsId[] = intval($request->input('quote'));
         }
 
         if (!empty($postsId)) {

@@ -25,7 +25,7 @@
                 <h3>{{ user('name') }}</h3>
 
                 <ol class="list-inline">
-                    <li><a href="{{ route('home') }}">Wyjście</a></li>
+                    <li><a href="{{ route('adm.exit') }}">Wyloguj z panelu</a></li>
                 </ol>
             </div>
 
@@ -90,7 +90,10 @@
     {{ form_close() }}
 
     <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+    <script src="{{ cdn('js/runtime.js') }}"></script>
     <script src="{{ cdn('js/app.js') }}"></script>
+    <script src="{{ cdn('js/common.js') }}"></script>
+    <script src="{{ cdn('js/vendor.js') }}"></script>
 
     <script type="text/javascript">
         $(function() {
