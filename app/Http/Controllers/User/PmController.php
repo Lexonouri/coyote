@@ -148,7 +148,7 @@ class PmController extends BaseController
      */
     public function preview(Request $request)
     {
-        return response($this->getParser()->parse($request->get('text')));
+        return response($this->getParser()->parse((string) $request->get('text')));
     }
 
     /**
@@ -160,7 +160,7 @@ class PmController extends BaseController
         $validator = $this->getValidationFactory()->make($request->all(), [
             'recipient'          => 'required|user_exist',
             'text'               => 'required',
-            'root_id'            => 'sometimes|exists:pm'
+            'root_id'            => 'nullable|exists:pm'
         ]);
 
         $validator->after(function (Validator $validator) use ($request) {

@@ -59,13 +59,13 @@ class OAuthController extends Controller
         if (!$user) {
             $user = $this->user->findByEmail($oauth->getEmail());
 
-            if ($user !== null && $user->provider === null) {
+            if ($user !== null) {
                 // merge with existing user account
                 $user->provider = $provider;
                 $user->provider_id = $oauth->getId();
                 $user->save();
             } else {
-                $name = $oauth->getName() ?: $oauth->getNickName();
+                $name = trim($oauth->getName() ?: $oauth->getNickName());
 
                 // it's important to check login name using case insensitive...
                 if ($this->user->findByName($name)) {
@@ -96,8 +96,6 @@ class OAuthController extends Controller
                     'guest_id' => $this->request->session()->get('guest_id')
                 ]);
             }
-
-            stream(Stream_Create::class, new Stream_Person($user->toArray()));
         }
 
         if ($user->is_blocked || !$user->is_active) {
@@ -105,6 +103,11 @@ class OAuthController extends Controller
         }
 
         auth()->login($user, true);
+
+        if ($user->wasRecentlyCreated) {
+            stream(Stream_Create::class, new Stream_Person($user->toArray()));
+        }
+
         stream(Stream_Login::class);
 
         return redirect()->intended(route('home'));

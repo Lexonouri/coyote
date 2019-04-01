@@ -24,8 +24,8 @@
             <script type="text/javascript">var _config = {{ __public|default('{}')|raw }};</script>
         {% endblock %}
 
-        <link rel="apple-touch-icon" href="{{ secure_asset('img/apple-touch.png') }}">
-        <link rel="shortcut icon" href="{{ secure_asset('img/favicon.png') }}" type="image/png">
+        <link rel="apple-touch-icon" href="{{ asset('img/apple-touch.png') }}">
+        <link rel="shortcut icon" href="{{ asset('img/favicon.png') }}" type="image/png">
 
         {{ render_region('head') }}
     </head>
@@ -166,7 +166,7 @@
                                 </li>
                             </ul>
                         {% else %}
-                            <a class="btn btn-warning btn-sm navbar-right navbar-btn btn-register" href="{{ route('register') }}"><i class="fa fa-sign-in"></i> Utwórz konto</a>
+                            <a class="btn btn-primary btn-sm navbar-right navbar-btn btn-register" href="{{ route('register') }}"><i class="fa fa-sign-in"></i> Utwórz konto</a>
                             <a class="btn btn-default btn-sm navbar-right navbar-btn" href="{{ route('login') }}">Logowanie</a>
                         {% endif %}
                     </div>
@@ -195,7 +195,7 @@
                             {% else %}
                                 <div class="row">
                                     <div class="col-xs-6">
-                                        <a class="btn btn-warning btn-xs" href="{{ route('register') }}"><i class="fa fa-sign-in"></i> Utwórz konto</a>
+                                        <a class="btn btn-primary btn-xs" href="{{ route('register') }}"><i class="fa fa-sign-in"></i> Utwórz konto</a>
                                     </div>
                                     <div class="col-xs-6">
                                         <a class="btn btn-default btn-xs" href="{{ route('login') }}">Logowanie</a>

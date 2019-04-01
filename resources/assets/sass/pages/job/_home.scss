@@ -1,27 +1,247 @@
-// Background color for job homepage (only in header of home page)
-$header-footer-color: darken($body-bg, 0.8%);
-$header-footer-border: #c7c7c7;
 
-// Job homepage header. Contains search box and post offer button
-// ---------------------------------------------------------------
+.panel-job {
+  > .panel-body {
+    padding: 10px 15px;
+  }
 
-#job-header-container {
-  background-color: $header-footer-color;
-  border-bottom: 1px solid $header-footer-border;
+  .skeleton-media,
+  .media-object {
+    width: 95px;
+    height: 95px;
+  }
+
+  .skeleton-header {
+    width: 100%;
+    height: 20px;
+  }
+
+  .media-object {
+    position: relative;
+
+    @include img-placeholder('/img/logo-gray.png', 95px, 95px);
+  }
+
+  .padding-xs-bottom {
+    border-bottom: 1px solid $border-color;
+    clear: left;
+  }
+
+  .salary {
+    clear: both;
+  }
+
+  .job-options {
+    margin-bottom: 0;
+    color: $text-muted;
+    font-size: $font-size-small - 1;
+
+    a {
+      color: inherit;
+    }
+  }
+
+  .on {
+    color: lighten($alt-link-hover-color, 5%);
+  }
+
+  &.highlight {
+    background-color: $unread-bg;
+  }
 }
 
-// Formularz wyszukiwania oferty
-// -------------------------------------------
+.list-group-tech {
+  list-style: none;
+  margin: 0;
 
-#box-search {
-  margin: 43px auto 43px auto;
+  &.inline {
+    display: flex;
+    align-items: center;
+
+    .list-group-item a:hover:after {
+      @include remove-overlay();
+    }
+  }
+
+  .list-group-item {
+    display: inline-block;
+    border-radius: $border-radius-large;
+    margin-right: 5px;
+    background: darken($tag-bg, 2%);
+    border: none;
+    padding: 0;
+
+    a {
+      color: $gray-light;
+      font-size: $font-size-small;
+      display: block;
+      padding: 5px;
+      text-decoration: none;
+      white-space: nowrap;
+
+      &.disabled {
+        opacity: .7;
+
+        img {
+          @include grayscale;
+        }
+      }
+    }
+
+    img {
+      width: 18px;
+    }
+
+    input[type=checkbox] {
+      display: none;
+    }
+
+    label {
+      font-weight: normal;
+      margin: 0;
+    }
+  }
+}
+
+.job-search-form {
+  display: flex;
+  flex-flow: row nowrap;
+  padding: 10px;
+
+  > .input-item {
+    position: relative;
+    margin-left: 15px;
+    padding-right: 15px;
+    display: flex;
+
+    &.keyword-search {
+      margin-left: 0;
+    }
+
+    &.keyword-search,
+    &.location-search {
+      flex-basis: 35%;
+    }
+
+    &.salary-search {
+      flex-basis: 20%;
+    }
+
+    &.button-search {
+      flex-basis: 10%;
+      padding-right: 0;
+    }
+
+    &.extended {
+      @media screen and (min-width: $screen-sm) {
+        //flex-basis: 50%;
+        //transition: all 300ms cubic-bezier(.25, .46, .45, .94);
+        //transition-delay: .1s;
+
+        &:after,
+        &:before {
+          bottom: -11px;
+          left: 11px;
+          border: solid transparent;
+          content: " ";
+          height: 0;
+          width: 0;
+          position: absolute;
+          pointer-events: none;
+          z-index: 1;
+        }
+
+        &:after {
+          border-color: rgba(245, 245, 245, 0);
+          border-bottom-color: #f5f5f5;
+          border-width: 6px;
+          margin-left: -6px;
+        }
+
+        &:before {
+          border-color: rgba(221, 221, 221, 0);
+          border-bottom-color: #ddd;
+          border-width: 7px;
+          margin-left: -7px;
+        }
+      }
+    }
+  }
+
+  .fa-icon {
+    font-size: 16px;
+    color: lighten($gray-light, 10%);
+    padding-top: 7px;
+    flex: 0 0 auto;
+  }
+
+  .fa-angle-down, .fa-angle-up {
+    right: 5px;
+  }
+
+  button[type=submit] {
+    width: 100%;
+  }
+
+  .form-control {
+    border: none;
+    box-shadow: none;
+    flex: 1 1 auto;
+  }
+
+  @media screen and (min-width: $screen-sm) {
+    > .input-item {
+      &.keyword-search,
+      &.location-search {
+        border-right: 1px solid $border-color;
+      }
+    }
+  }
+
+  @media screen and (max-width: $screen-sm) {
+    flex-flow: column nowrap;
+
+    > .input-item {
+      margin-left: 0;
+    }
+  }
+}
+
+.job-filter-form {
+  .btn-salary {
+    border: 1px solid $border-color;
+    background: #f5f5f5;
+    text-align: center;
+    display: block;
+  }
+
+  @media screen and (min-width: $screen-sm) {
+    .form-group-salary {
+      float: right;
+    }
+  }
+
+  @media screen and (max-width: $screen-sm) {
+    .filters {
+      position: relative;
+    }
+
+    .list-group-tech {
+      white-space: nowrap;
+    }
+  }
+}
+
+#panel-subscribed,
+#panel-published {
+    position: relative;
+    max-height: 400px;
 }
 
 // Post offer button (for employers)
 // -----------------------------------------------------------
 
 #post-offer {
-  margin-top: 20px;
+  margin-top: 35px;
   margin-left: 17%;
 
   h4 {
@@ -53,285 +273,6 @@ $header-footer-border: #c7c7c7;
   100% { transform: rotate(0deg); }
 }
 
-// Main content begins here...
-// -----------------------------------------------------
-
-#job-main-content {
-  padding-top: 15px;
-
-  .pagination {
-    margin: 0;
-  }
-
-  aside {
-    .box:first-child {
-      > h4 {
-        margin-top: 0;
-      }
-    }
-  }
-}
-
-.list-group-language {
-  img {
-    width: 20px;
-  }
-
-  &.filtered {
-    img {
-      @include grayscale;
-    }
-
-    input[type="checkbox"]:checked + a {
-      img {
-        filter: url("data:image/svg+xml;utf8,&lt;svg xmlns=\'http://www.w3.org/2000/svg\'&gt;&lt;filter id=\'grayscale\'&gt;&lt;feColorMatrix type=\'matrix\' values=\'1 0 0 0 0, 0 1 0 0 0, 0 0 1 0 0, 0 0 0 1 0\'/&gt;&lt;/filter&gt;&lt;/svg&gt;#grayscale");
-        -webkit-filter: grayscale(0%);
-      }
-    }
-  }
-}
-
-.list-group-city {
-  a {
-    padding-left: 19px;
-
-    i {
-      font-size: $font-size-large;
-      vertical-align: middle;
-    }
-
-    &:before {
-      @include font-awesome($fa-var-square-o);
-
-      left: 5px;
-      top: 1px;
-      font-size: 19px;
-    }
-  }
-
-  input[type="checkbox"]:checked + a {
-    &:before {
-      content: $fa-var-check-square-o;
-    }
-  }
-}
-
-#box-filter {
-  h5 {
-    color: $box-header-color;
-    font-size: $font-family-base;
-  }
-
-  .list-group-item {
-    padding: 5px;
-    margin-top: 4px;
-
-    input[type=checkbox] {
-      display: none;
-    }
-
-    a {
-      display: block;
-      color: $text-color;
-
-      span {
-        padding-left: 3px;
-        color: $gray-light;
-      }
-
-      small {
-        color: $gray-light;
-        font-size: 9px;
-      }
-
-      &:hover,
-      &:focus,
-      &:active {
-        text-decoration: none;
-      }
-    }
-
-    &:hover {
-      border-color: $border-color;
-    }
-  }
-
-  .btn-reset {
-    color: $gray-light;
-    font-size: $font-size-small;
-    margin-top: 10px;
-
-    &:hover {
-      color: $gray;
-      text-decoration: none;
-    }
-  }
-
-  .form-search {
-    margin-top: 30px;
-  }
-}
-
-#box-jobs {
-  table {
-    border: 1px solid $border-color;
-    background: #fff;
-    border-radius: 3px;
-    margin: 0 1px 1px 1px;
-    width: 100%;
-    table-layout: fixed;
-
-    // extra margin for regular listing (to separate from premium ones).
-    & + table {
-      margin-top: 10px;
-    }
-  }
-
-  tr {
-    &:nth-child(even) {
-      background-color: #fafafa;
-    }
-
-    &.highlight {
-      > td {
-        background-color: $unread-bg;
-      }
-    }
-
-    td {
-      padding: 5px;
-      border-bottom: 1px solid $border-color;
-    }
-
-    // Extra padding for first premium offer
-    // -------------------------------------
-    &.top-spot {
-      > td {
-        padding-top: 24px;
-      }
-    }
-
-    // Offer logo
-    // ---------------------------------------------
-    .col-logo {
-      width: 70px;
-
-      img {
-        max-width: 100%;
-      }
-
-      @media screen and (max-width: $screen-sm) {
-        width: 35px;
-      }
-
-      @media screen and (max-width: $screen-xs) {
-        display: none;
-      }
-    }
-
-    // Offer content (tags, location, company name)
-    // -----------------------------------------------
-    .col-body {
-      padding: 7px 1% 7px 0;
-
-      h2 {
-        font-size: 15px;
-        margin: 0 0 5px 0;
-        float: left;
-
-        @media screen and (max-width: $screen-xs) {
-          font-size: 14px;
-        }
-      }
-
-      p {
-        font-size: 12px;
-        clear: both;
-        padding: 0;
-        line-height: 1.4;
-        margin: 0;
-      }
-
-      small.location {
-        color: $gray-light;
-
-        a {
-          font-size: 11px;
-          color: inherit;
-        }
-      }
-
-      // extra margin for tags
-      .tag-clouds {
-        margin-top: 4px;
-      }
-
-      @media screen and (max-width: $screen-xs) {
-        padding-left: 5px;
-      }
-    }
-
-    // Salary column (hidden on mobile devices)
-    // -----------------------------------------------
-    .col-salary {
-      width: 16%;
-
-      .salary {
-        font-size: $font-size-small;
-        margin: 0;
-      }
-
-      // extra margin that separates two labels
-      .salary + .bonus {
-        margin-top: 3px;
-      }
-    }
-
-    .col-time {
-      width: 15%;
-
-      > .text-muted {
-        font-size: 11px;
-      }
-    }
-
-    .col-fav {
-      width: 40px;
-    }
-
-    .bonus {
-      text-transform: uppercase;
-      font-size: 14px;
-      margin: 0;
-    }
-
-    .label-bonus {
-      border: 1px solid #FF7B33;
-      color: #FF7B33;
-    }
-
-    .btn-subscribe {
-      opacity: .3;
-      float: right;
-      width: 16px;
-      height: 16px;
-      font-size: 16px;
-      margin: 0 5px 0 0;
-      position: relative;
-      display: inline-block;
-    }
-
-    .btn-subscribe.on {
-      opacity: 1;
-    }
-
-    &:hover {
-      .btn-subscribe {
-        opacity: 1;
-      }
-    }
-  }
-}
 
 #clients {
   //background-color: $header-footer-color;
@@ -357,7 +298,7 @@ $header-footer-border: #c7c7c7;
 
 .medal {
   margin-left: 8px;
-  margin-top: -2px;
+  margin-top: 0;
   display: inline-block;
   background: url('/img/medal.png') no-repeat;
   width: 20px;
@@ -373,9 +314,10 @@ $header-footer-border: #c7c7c7;
   color: $state-warning-text;
   font-size: 11px;
   font-weight: normal;
-  margin-left: -12px;
+  margin-left: -7px;
   border-radius: 0;
-  margin-top: -21px;
+  margin-top: 5px;
+  z-index: 1000;
   border-top-right-radius: $border-radius-small;
   border-bottom-right-radius: $border-radius-small;
 

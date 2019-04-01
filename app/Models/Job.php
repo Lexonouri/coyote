@@ -270,13 +270,6 @@ class Job extends Model
         parent::boot();
 
         static::saving(function (Job $model) {
-            // nullable column
-            foreach (['firm_id', 'salary_from', 'salary_to', 'remote_range', 'seniority_id'] as $column) {
-                if (empty($model->{$column})) {
-                    $model->{$column} = null;
-                }
-            }
-
             $model->score = $model->getScore();
 
             // field must not be null
@@ -693,7 +686,7 @@ class Job extends Model
             'currency_symbol'   => $this->currency()->value('symbol'),
             // higher tag's priorities first
             'tags'              => $this->tags()->get(['name', 'priority'])->sortByDesc('pivot.priority')->pluck('name')->toArray(),
-            // index null instead of 100 is job is not remote
+            //            // index null instead of 100 is job is not remote
             'remote_range'      => $this->is_remote ? $this->remote_range : null
         ]);
 
@@ -710,7 +703,7 @@ class Job extends Model
      * @param float|null $salary
      * @return float|null
      */
-    private function monthlySalary($salary)
+    public function monthlySalary($salary)
     {
         if (empty($salary) || $this->rate_id === self::MONTH) {
             return $salary;
